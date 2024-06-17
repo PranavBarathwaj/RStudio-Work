@@ -1,0 +1,306 @@
+---
+title: "Week 6 Data Dive"
+output: html_document
+date: "2023-09-26"
+---
+Importing libraries to run.
+
+```{r}
+library(tidyverse)
+library(boot)
+library(binom)
+library(dplyr)
+library(knitr)
+```
+
+Initially setting our directories and loading our data.
+
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+Saving a raw version of our dataset before mutating columns into them.
+
+```{r}
+youtube_raw<- youtube
+```
+
+
+**1.Creation and analysis of the first set of variable combination:**
+
+```{r}
+youtube <- youtube |>
+  group_by(Country) |>
+  mutate(earn_median = median(highest_yearly_earnings),
+         earn_class = ifelse(highest_yearly_earnings >= earn_median, "high earners", "low earners")) |>
+  ungroup()
+
+youtube |>
+  select(category, category, earn_class)
+```
+
+The set of variables is {"high earners", "low earners"} based of the explanatory variable 'highest yearly earnings'. The above code groups the youtube data by the 'Country' column, calculates the median of 'highest_yearly_earnings' within each group, and assigns "high earners" or "low earners" to the "earn_class" column based on whether "highest_yearly_earnings" is greater than or equal to the median. In this way, the response variable 'earn_class' is created that showcases the youtubers who earn higher and those who earn lower in a year.
+
+Let us visualize the response-explanatory relationship by taking a scatter plot and box plot. 
+
+```{r}
+youtube|>
+  ggplot()+
+  geom_point(mapping=aes(x=highest_yearly_earnings, y=earn_class, color=category))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+youtube|>
+ggplot() + 
+  geom_boxplot(mapping = aes(highest_yearly_earnings, y=earn_class))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the scatter plot, it becomes evident that individuals with lower income levels tend to cluster toward the lower range of 'highest yearly earnings,' while those with higher incomes are predominantly found at the opposite end. This observation suggests a correlation: as the highest yearly earnings increase, there is a noticeable rise in the number of high earners. 
+From the box and scatter plot, we observe a striking presence of outliers among high earners, but this phenomenon is notably less pronounced among low earners. This observation raises the intriguing possibility that within the category of high earners, some YouTubers earn significantly more than their peers. In contrast, low earners tend to earn within a relatively consistent income range.
+
+Let us calculate the Correlation coefficient of this combination. We use spearman's method as we are using discrete values with an order like "low earners" and "high earners".
+
+```{r}
+youtube$earn_class_numeric <- ifelse(youtube$earn_class == "high earners", 1, 0)
+cor(youtube$earn_class_numeric, youtube$highest_yearly_earnings, method = "spearman")
+```
+
+In the above code, we first convert 'earn_class' into a binary numeric variable where 1 represents "high earners" and 0 represents "low earners." After which we the Spearman correlation between the newly created binary numeric variable and highest_yearly_earnings. We get the correlation coefficient value of 0.7285265.
+This makes sense as there is a relatively strong positive monotonic relationship between these two variables. However, this also means the relationship isn't completely linear. This can be proved by the presence of a lot of outliers among high earners. 
+
+Let us calculate the confidence intervals for the proportions of "high earners" and "low earners" based on bootstrapping. 
+
+```{r}
+earn_class<-youtube$earn_class
+# Function to calculate proportions
+calculate_proportions <- function(data) {
+  prop_high_earners <- sum(data == "high earners") / length(data)
+  prop_low_earners <- sum(data == "low earners") / length(data)
+  return(c(prop_high_earners, prop_low_earners))
+}
+
+# Set the number of bootstrap iterations
+n_iter <- 1000
+
+# Create an empty matrix to store bootstrap results
+bootstrap_results <- matrix(nrow = n_iter, ncol = 2)
+
+# Perform bootstrapping
+for (i in 1:n_iter) {
+  # Resample the data with replacement
+  resampled_data <- sample(earn_class, replace = TRUE)
+  
+  # Calculate proportions and store in the matrix
+  bootstrap_results[i, ] <- calculate_proportions(resampled_data)
+}
+
+# Calculate confidence intervals (percentile method)
+confidence_intervals <- apply(bootstrap_results, 2, function(x) quantile(x, c(0.025, 0.975)))
+
+# Print confidence intervals
+print(confidence_intervals)
+
+
+```
+
+**Conclusion of the response variable based on confidence interval:**
+The first column, [,1], represents the confidence interval for the proportion of "high earners."
+The second column, [,2], represents the confidence interval for the proportion of "low earners."
+
+For the proportion of "high earners," you can say with 95% confidence that it falls within the range of approximately 49.15% to 55.28%. This means at least 49.15% of the individuals in your dataset can be classified as "high earners and at most 55.28% of the individuals in your dataset can be classified as "high earners.
+For the proportion of "low earners," you can say with 95% confidence that it falls within the range of approximately 44.72% to 50.85%. Therefore, you can be reasonably confident that the true proportion or percentage value for "low earners" falls at or above 49.15% and the true proportion or percentage value falls at or below 55.28%. 
+
+**2.Creation and analysis of the second set of variable combination:**
+
+```{r}
+pop_breaks <- 10 ^ c(4, 5, 6, 7, 8, 9, 10)
+pop_labels <- c(">10K", ">100K", ">1M", ">10M", ">100M", ">1B")
+
+youtube <- youtube |>
+  mutate(pop_cut = cut(Population, breaks = pop_breaks, 
+                       labels = pop_labels, right = TRUE))
+
+youtube |>
+  select(created_year,pop_cut)
+```
+
+The set of variables is {">10K", ">100K", ">1M", ">10M", ">100M", ">1B"} based of the explanatory variable 'Population'. We use the cut function to create boundaries and their respective labels that can be used to categorize the Population values into bins defined by pop_breaks and assigns corresponding labels from pop_labels to each category.
+
+Let us visualize the response-explanatory relationship by taking a bar and box plot. 
+
+```{r}
+youtube|>
+  ggplot()+
+  geom_bar(mapping = aes(x = pop_cut))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+youtube|>
+ggplot() + 
+  geom_boxplot(mapping = aes(x=Population, y=pop_cut))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the bar plot, we see that the majority of YouTubers originate from countries with populations falling within the range of 100 million to 1 billion. Conversely, there is a notable scarcity of YouTubers hailing from countries with populations below 10 million. This suggests that YouTube content creation is more prevalent in countries with larger populations.
+From the box plot, we see an irregular rate of increase between the 'population' and 'pop_cut' categories. There is a substantial gap between countries with populations ranging from 100 million to 1 billion.  This shows that YouTube content creation is not evenly distributed across countries; rather, it appears to be concentrated in nations with larger populations. The outliers are exclusively present within the '>1B' population category. This finding suggests that there may be exceptional cases where countries with extremely large populations have a disproportionately high number of YouTubers, further emphasizing the inconsistent relationship between 'population' and 'pop_cut.'
+
+Let us calculate the Correlation coefficient of this combination.
+
+```{r}
+# Remove rows with missing values in pop_cut and Population
+youtube_cleaned <- youtube[complete.cases(youtube$pop_cut, youtube$Population), ]
+
+# Convert pop_cut to a character variable and remove any leading/trailing spaces
+youtube_cleaned$pop_cut <- as.character(youtube_cleaned$pop_cut)
+youtube_cleaned$pop_cut <- trimws(youtube_cleaned$pop_cut)
+
+# Create a numeric representation of pop_cut
+pop_cut_numeric <- as.numeric(as.factor(youtube_cleaned$pop_cut))
+
+# Calculate the Spearman correlation coefficient
+cor(pop_cut_numeric, youtube_cleaned$Population, method = "spearman")
+```
+
+The correlation coefficient comes to be 0.1096833. This shows there is a weak monotonic positive relationship between the explanatory and response variable. This means that the variables tend to move in the same direction but not necessarily at a constant rate. There is a weak tendency for the values of the 'Population' variable to also increase as 'pop_cut' also increases. This surely agrees with the information attained from the boxplot that indicates the substantial gap between countries with populations ranging from 100 million to 1 billion.
+
+Let us calculate the confidence intervals for the labels of populations.
+
+```{r}
+# Calculate proportions of each pop_cut category
+pop_cut_proportions <- table(youtube$pop_cut) / length(youtube$pop_cut)
+
+# Calculate standard errors for each proportion
+standard_errors <- sqrt(pop_cut_proportions * (1 - pop_cut_proportions) / length(youtube$pop_cut))
+
+# Calculate confidence intervals based on standard errors
+z <- qnorm(0.975)  # 95% confidence interval
+lower_bound <- pop_cut_proportions - z * standard_errors
+upper_bound <- pop_cut_proportions + z * standard_errors
+
+# Create a data frame to store results
+confidence_intervals_df <- data.frame(
+  Category = names(pop_cut_proportions),
+  Proportion = pop_cut_proportions,
+  Lower_CI = abs(lower_bound),
+  Upper_CI = abs(upper_bound)
+)
+
+# Print the confidence intervals data frame
+print(confidence_intervals_df)
+```
+
+**Conclusion of the response variable based on confidence interval:**
+- For 10k, proportion for "10K" falls at or above 0.00% and the proportion  falls at or below 0.00%. 
+
+- For 100k, proportion for "100K" falls at or above 0.077% and the proportion  falls at or below 0.479%. 
+
+- For 1M, proportion for "10K" falls at or above 0.75% and the proportion  falls at or below 2.26%. 
+
+- For 10M, proportion for "10K" falls at or above 18.37% and the proportion  falls at or below 23.43%. 
+
+- For 100M, proportion for "10K" falls at or above 44.93% and the proportion  falls at or below 51.14%. 
+
+- For 1B, proportion for "10K" falls at or above 14.65% and the proportion  falls at or below 19.31%. 
+
+**3.Creation and analysis of the third set of variable combination:**
+
+```{r}
+youtube <- youtube |>
+  group_by(category) |>
+  mutate(
+    educ_class = case_when(
+      `Gross tertiary education enrollment (%)` >20.0 & `Gross tertiary education enrollment (%)`<=30.0 ~ 2,
+      `Gross tertiary education enrollment (%)` >30.0 & `Gross tertiary education enrollment (%)`<=40.0 ~ 3,
+      `Gross tertiary education enrollment (%)` >40.0 & `Gross tertiary education enrollment (%)`<=50.0 ~ 4,
+      `Gross tertiary education enrollment (%)` >50.0 & `Gross tertiary education enrollment (%)`<=60.0 ~ 5,
+      `Gross tertiary education enrollment (%)` >60.0 & `Gross tertiary education enrollment (%)`<=70.0 ~ 6,
+      `Gross tertiary education enrollment (%)` >70.0 & `Gross tertiary education enrollment (%)`<=80.0 ~ 7,
+      `Gross tertiary education enrollment (%)` >80.0 & `Gross tertiary education enrollment (%)`<=90.0 ~ 8,
+      `Gross tertiary education enrollment (%)` >90.0 & `Gross tertiary education enrollment (%)`<=100.0 ~ 9
+    )) |>
+  ungroup()
+
+youtube |>
+  select(category, educ_class)
+```
+
+The set of variables is {2,3,4,5,6,7,8,9} based of the explanatory variable 'Population'. The above code categorizes data within each category based on the Gross tertiary education enrollment (%) column's values, assigning values from 2 to 9 based on specified ranges. 
+
+Let us visualize the response-explanatory relationship by taking a bar and scatter plot. 
+
+```{r}
+youtube|>
+  ggplot()+
+  geom_bar(mapping = aes(x = educ_class))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+youtube|>
+ggplot() + 
+  geom_point(mapping = aes(x=`Gross tertiary education enrollment (%)`, y=educ_class))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the bar plot, it becomes evident that the majority of Youtubers in the dataset come from countries with a relatively high level of gross tertiary education enrollment, as indicated by an educ_class score of 8. This suggests that a significant portion of Youtubers are based in countries with well-developed educational systems. Conversely, the second most common educ_class is 1, implying that there is also a substantial presence of Youtubers originating from countries with lower gross tertiary education enrollment rates. In essence, the bar plot underscores the diversity of Youtubers' educational backgrounds, with a prevalence of both high and low education enrollment countries.
+
+From the scatter plot, we see as the gross tertiary education enrollment percentage increases, the educ_class tends to increase. This aligns with the overall trend observed in the dataset, indicating that Youtubers from countries with higher education enrollment percentages are more likely to belong to higher educational classes. However, it's worth noting a peculiar observation in the scatter plot. For educ_class 7, there is a notable inconsistency. Unlike other educ_class levels, there is no clear median range of values within this class.  
+
+Let us calculate the Correlation coefficient of this combination.
+
+```{r}
+# Check for missing values and remove rows with NAs
+complete_data <- youtube[complete.cases(youtube$educ_class, youtube$`Gross tertiary education enrollment (%)`), ]
+
+# Calculate Spearman correlation
+cor(complete_data$educ_class, complete_data$`Gross tertiary education enrollment (%)`, method = "spearman")
+```
+
+The calculated correlation coefficient of 0.9760282 indicates an extremely strong positive relationship between the explanatory variable, 'Gross tertiary education enrollment (%)', and the response variable, educ_class. This correlation is exceptionally close to a perfect positive correlation of 1.0, suggesting a nearly ideal positive monotonic relationship. the correlation coefficient of 0.9760282 strongly supports the notion of a near-perfect positive relationship between education enrollment and educational class, as visually confirmed by the scatter plot. The minor deviation from perfection could be attributed to specific factors affecting educ_class 7, warranting further exploration.
+
+Let us calculate the confidence interval for the scale of values:
+
+```{r}
+# Calculate proportions of each educ_class category
+educ_class_proportions <- table(youtube$educ_class) / length(youtube$educ_class)
+
+# Calculate standard errors for each proportion
+standard_errors <- sqrt(educ_class_proportions * (1 - educ_class_proportions) / length(youtube$educ_class))
+
+# Calculate confidence intervals based on standard errors
+z <- qnorm(0.975)  # 95% confidence interval
+lower_bound <- educ_class_proportions - z * standard_errors
+upper_bound <- educ_class_proportions + z * standard_errors
+
+# Create a data frame to store results
+confidence_intervals_df <- data.frame(
+  Category = names(educ_class_proportions),
+  Proportion = educ_class_proportions,
+  Lower_CI = lower_bound,
+  Upper_CI = upper_bound
+)
+
+# Print the confidence intervals data frame
+print(confidence_intervals_df)
+
+```
+
+**Conclusion of the response variable based on confidence interval:**
+
+- For scale 2, proportion falls at or above 15.41% and the proportion  falls at or below 20.16%. 
+
+- For scale 3, proportion falls at or above 3.93% and the proportion  falls at or below 6.721%. 
+
+- For scale 4, proportion falls at or above 4.1% and the proportion  falls at or below 6.94%. 
+
+- For scale 5, proportion falls at or above 9.943% and the proportion  falls at or below 13.97%. 
+
+- For scale 6, proportion falls at or above 0.8% and the proportion  falls at or below 1.35%. 
+
+- For scale 7, proportion falls at or above 1.7% and the proportion  falls at or below 2.5%. 
+
+**Conclusion for this data dive:**
+
+Our data dive reveals several intriguing insights within the YouTube statistics dataset. We observed a strong positive correlation between the highest yearly earnings and the classification of YouTubers as "high earners" or "low earners." Additionally, we identified the presence of outliers among high earners, suggesting exceptional cases of significantly higher earnings. Conversely, low earners exhibited a more consistent income range.
+
+Furthermore, we explored the relationship between YouTubers' countries and their earnings, indicating that YouTube content creation is more prevalent in countries with larger populations. We also noted a concentration of outliers among countries with extremely large populations, emphasizing the uneven distribution of YouTubers.
+
+Lastly, we examined the connection between education enrollment percentages and educational classes, finding a nearly perfect positive correlation. However, the presence of outliers in one particular class warrants further investigation.

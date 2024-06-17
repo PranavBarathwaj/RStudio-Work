@@ -1,0 +1,109 @@
+---
+title: "Week 5 Data Dive"
+output: html_document
+date: "2023-09-25"
+---
+
+Importing libraries to run.
+```{r}
+library(tidyverse)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+**For this data dive, we are going to focus on to think critically about the importance of documenting our model, but also the importance of referencing the documentation for the data we use.**
+
+**A list of at least 3 columns (or values) in my data which are unclear until you read the documentation.**
+
+a. The columns 'Category' and 'Channel Type':
+
+When I first glanced at the dataset, I couldn't help but notice the striking similarity between the columns 'Category' and 'Channel Type.' For instance, 'Music' in the 'Category' column seemed to correspond precisely to 'Music' in the 'Channel Type' column. This pattern extended across numerous values, leaving me somewhat perplexed until I took the time to consult the documentation.
+
+So, why were these two columns encoded in this specific manner? It became evident that the encoding aimed to distinguish between the category or niche of the YouTube channel and the channel's type. For example, even though multiple channels fell under the 'Film & Animation' category, each of them could be associated with distinct channel types such as 'Music' and 'Entertainment.' This nuanced relationship could be more effectively visualized through the creation of a scatter plot displaying the shared values between these two columns.
+
+```{r}
+ggplot(data = youtube) + 
+  geom_point(mapping = aes(x = category, y = channel_type))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+What could have happened if I didn't read the documentation?  I would have likely assumed both columns were redundant duplicates of each other. Consequently, I might have made the decision to delete one of the columns. This would have hindered my research, leading to inaccurate and incomplete results.
+
+b. Column 'country rank':
+
+As I initially scanned through this column, I found myself wondering about its significance. Was it a ranking for the best country? Perhaps a ranking based on countries with higher earnings, or maybe it indicated the countries with the most YouTube channels? None of these questions were immediately clear until I delved into the documentation.
+
+I also observed that the ranks repeated frequently. Initially, I thought this might be due to a few attributes having the same rank. However, as I encountered more than 20 instances with identical ranks, I realized that this wasn't the case.
+
+So, why was it encoded in this particular manner? It turns out that this column was the ranking of the channel based on the number of subscribers within its country.
+
+Reflecting on what might have happened if I hadn't read the documentation, it's clear that I would have remained uncertain about its meaning. Consequently, I might have opted not to use that column in my analysis.
+
+c. The columns 'Youtube' and 'Title':
+
+Upon initial inspection, it's hard to ignore the striking similarity between 'Youtube' and 'Title.' At first glance, it almost felt as if there was no substantial difference between them. However, upon closer examination, it became apparent that these two columns did have a difference that could be explained. 
+
+So, why were these two columns encoded in this specific manner? Evidently, the 'Youtube' column represents the channel name, which serves as the primary identifier for a YouTube channel. This name is often referred to as the "channel's display name" or "channel's username." Conversely, the 'Title' column represents a piece of metadata associated with the channel, known as the channel title. The channel name (display name or username) serves as the primary identifier, while the channel title acts as supplementary metadata.
+
+Had I not referred to the documentation, I might have considered these columns redundant and contemplated deleting one of them, similar to the situation described in 'a.'
+
+In this dataset, both columns often contain matching values for the respective YouTube channels. However, their significance lies in maintaining a primary and secondary identifier for these channels.
+
+d. Column 'Urban population':
+
+Initially, I had a clear understanding when examining the values in the 'Urban population' column, assuming it represented the actual number of people residing in urban areas. However, upon consulting the data documentation, I was surprised to find that the column was labeled as the "Percentage of the population living in urban areas." This unexpected revelation left me somewhat perplexed and led to a reversal in my understanding of the column's content.
+
+Rather than gaining clarity through the documentation, my comprehension of the column became muddled. The dataset itself presented no indications of percentage values, with figures reaching as high as 20 million, which logically could not represent percentages. This led me to the conclusion that the documentation was inaccurate and required correction to align with the actual data.
+
+**At least one element or your data that is unclear even after reading the documentation.**
+
+a. Question marks in 'Youtuber' and 'Title':
+
+Upon inspection, I noticed the presence of symbols like ' �' in some YouTube channel names and titles within the dataset. Interestingly, the documentation provided no reference to these symbols, leaving me somewhat perplexed about their significance. Let us build a visualization with these columns to highlight the issue, and explain what is unclear and why it might be unclear.
+
+
+ggplot(data = youtube) + 
+  geom_point(mapping = aes(x = Youtuber, y = Title))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(data = youtube) + 
+  geom_bar(mapping = aes(x = Youtuber))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+*The graphs show errors as it is unable to read the symbol as a valid input and this is hindering the ability to knit the RMarkdown file. Hence the above code hasn't been included in a code chunk and instead is shown as text* 
+
+This inability to read these symbols as valid inputs hinders our efforts to create visual representations. Ironically, these errors themselves serve as a glaring illustration of the problem. It's evident that these symbols pose a significant risk, potentially impeding our ability to expand our research through visualization. To mitigate this consequence, the only feasible approach is to manually remove these symbols from the cells in the dataset.
+
+However, what remains unclear is the origin of these symbols. How did they come to be in the first place? To the best of my understanding, they appear to be special characters that couldn't be rendered correctly, resulting in the formation of the ' �' symbol as an error. Alternatively, they could have arisen from data entry errors by the dataset's creator. Regrettably, there is no concrete evidence available to definitively pinpoint the exact source of these symbols.
+
+b. Value '0' in 'Video views' and 'Uploads':
+
+Upon a meticulous analysis of each column, a rather intriguing observation came to light: numerous channels boasted an astonishing number of subscribers, yet they seemed to have zero views or zero uploads. At first glance, this appeared to be a glaring anomaly, one that might have prompted me to consider deleting these seemingly inconsistent entries. However, my inclination was to investigate further before taking any action. Regrettably, the documentation provided no explanation for this peculiar phenomenon. After further research online, I understood that certain channels are owned by 'Youtube' themselves were represented as a channel type. These channels, represented as 'Youtube' channel types, functioned as repositories for all videos falling under their respective categories. For instance, any video categorized as 'Music' would automatically find a home in the 'Youtube Music' channel. As a result, these channels neither uploaded videos nor garnered views in the conventional sense. Nevertheless, they did amass subscribers, as they still constituted legitimate YouTube channels that users could subscribe to. This can be understood by creating a scatter plot between 'video views' and 'uploads' with Youtubers.
+
+```{r}
+youtube |>
+  filter(`video views`<  10 & uploads< 10)|>
+  ggplot()+
+  geom_point(mapping = aes(x = uploads, y = Youtuber))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+youtube |>
+  filter(`video views`<  10 & uploads< 10)|>
+  ggplot()+
+  geom_point(mapping = aes(x = `video views`, y = Youtuber))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The generated graphs effectively highlight the channels that fall within this particular bracket. However, it's essential to stress that, while this phenomenon may initially seem like an anomaly, it is not. The significant risk lies in the potential for data users to misinterpret these channels as anomalies and consequently remove or discount their data. Such a misunderstanding could hinder our research efforts and prevent us from comprehending the significance of these channels within the dataset. To mitigate this risk and ensure a clearer understanding for data users, it is advisable to document the importance and nature of these channels in the dataset's documentation. By providing this context, data users can navigate the dataset with greater ease and avoid making erroneous assumptions about these unique channels. 
+
+Without delving further into this issue, it would indeed remain unclear why these values were recorded as zeros. This uncertainty would persist, as it is inconceivable for a top 1000 YouTube channel to register zero views or zero uploads under normal circumstances. 
+
+**Conclusion:**
+
+In this data dive, we've explored the importance of documentation in understanding and interpreting a dataset. We've encountered several instances where the documentation played a crucial role in clarifying ambiguous or misleading data columns. However, we've also encountered situations where even after consulting the documentation, certain elements remained unclear. 
+
+In conclusion, this data dive underscores the vital role of comprehensive documentation in understanding and making meaningful use of a dataset. Documentation can clarify ambiguities, prevent misinterpretations, and provide essential context for data exploration. However, it also highlights the importance of thorough data examination and external research to address issues that documentation may not fully elucidate.

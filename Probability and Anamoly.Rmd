@@ -1,0 +1,177 @@
+---
+title: "Week 3 Data Dive"
+output: html_document
+date: "2023-09-11"
+---
+Importing libraries to run.
+```{r}
+library(tidyverse)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+Creating first group of dataframe.
+```{r}
+gp1<- youtube |>
+  group_by(category)|>
+  summarize(probability = sum(subscribers > 100000000) / n())
+df1<-data.frame(gp1)
+df1
+```
+
+In the above group, we calculate the probability of the number of channels having more than 10 million subscribers in each category.
+
+Visualizing dataframe 1:
+```{r}
+df1|>
+  ggplot()+
+  geom_point(mapping=aes(x=category,y=probability))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The above graph is a scatter plot between 'category' and its probabilities of having more 10 million subscribers.
+
+Conclusion 1:
+From the probability values, we conclude that among the 19 categories present, 11 of them have 0 probability of having subscribers more than 10 million. We also notice that category 'shows' have the highest probability of 0.076923077 and other categories have a probability of less than 0.03. This shows that most categories don't have the capabilities to go over 10 million subscribers and even if they do, most fall under the category 'shows'.
+
+Creating second group of dataframe.
+```{r}
+gp2<-youtube|>
+  group_by(Country)|>
+  filter(`Gross tertiary education enrollment (%)`>70.00 & `Unemployment rate` < 5.00 )|>
+  summarize(probability = sum(highest_yearly_earnings > 80000000) / n())
+df2<-data.frame(gp2)
+df2
+```
+
+In the above group, we are finding the probability of YouTube channels in each country having yearly earnings exceeding 80,000,000, given that the country has a gross tertiary education enrollment rate greater than 70% and an unemployment rate less than 5%. 
+
+Visualizing dataframe 2:
+```{r}
+  ggplot(df2, aes(x = Country, y = probability)) +
+  geom_bar(stat = "identity", fill = "blue", width = 0.7) +
+  labs(x = "Country", y = "Probability") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The above graph is a bar chart that shows countries probabilities. This visualization allows you to clearly see the contrast between the countries with a probability of 0 and the one country with a non-zero probability.
+
+Conclusion 2:
+South Korea stands out from the other countries in the dataset, as it has a non-zero probability (approximately 0.0588) while the rest of the countries have a probability of 0. This shows that a country's education and job prospects do not control the earnings of Youtubers.
+
+Creating third group of dataframe.
+```{r}
+gp3<- youtube |>
+  group_by(channel_type)|>
+  mutate(urban_ratio=Urban_population/Population)|>
+  filter(urban_ratio>0.85) |>
+  summarize(probability=sum(`video views`>mean(`video views`))/ n())
+df3<-data.frame(gp3)
+df3
+```
+
+In the above group, we calculate the probability that YouTube channels, grouped by their channel types, have video views greater than the mean video views across all channels in the dataset, with the additional condition that the urban population ratio within each channel type group must be greater than 0.85.
+
+Visualizing dataframe 3:
+```{r}
+  ggplot(df3, aes(x = probability, y = channel_type)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(x = "Probability", y = "Channel Type") +
+  theme_minimal()
+```
+
+The above graph is a horizontal bar graph to visualize the probability values for each channel type.
+
+Conclusion 3:
+Channel types like News and Nonprofit have probabilities of 0, indicating that, within the selected subset of channels with high urban population ratios (urban_ratio > 0.85), they are less likely to have video views above the mean. Meanwhile, channel types, such as Comedy and Games, tend to have a higher likelihood of engaging viewers where urban population ratio is more. 
+
+A testable hypothesis for why some groups are rarer than others:
+
+The rarity of each group is influenced by the combination of factors specific to the conditions it represents. Each group's rarity can be attributed to the unique intersection of multiple criteria or conditions that must be met simultaneously.
+
+This can be tested by taking a seperate hypothesis for each group and testing it to prove its rarity. 
+
+For group 1:
+Hypothesis: Categories that tend to have a higher probability of channels with over 10 million subscribers are rarer because reaching such a high subscriber count likely requires exceptional content quality, consistent effort, and specific content niches that resonate strongly with audiences.
+
+Testable Prediction: To test this hypothesis, you could analyze the content strategies, upload frequencies, and  of channels within these categories compared to others with lower probabilities.
+
+For group 2:
+Hypothesis: The rarity of high earnings in certain countries can be attributed to a combination of economic factors such as a well-educated population (high tertiary enrollment rates) and a strong job market (low unemployment rates), which are conducive to high earning potential for content creators.
+
+Testable Prediction: You can test this by conducting regression analysis to examine the influence of tertiary enrollment rates and unemployment rates on earnings, controlling for other relevant variables such as population size.
+
+For group 3:
+Hypothesis: The rarity of high video views in channel types with high urban ratios may result from the unique appeal of urban audiences who have better access to the internet, consume more online content, and engage more actively with videos.
+
+Testable Prediction: To test this, you can analyze user engagement metrics for channel types with high urban ratios compared to those with lower ratios and explore viewer behavior and preferences through surveys or user interviews.
+
+The results of each hypothesis, if supported by data and analysis, provide explanations for the rarity of each group based on specific factors and conditions. These findings help us understand why certain categories or conditions are rarer in the dataset, shedding light on the underlying dynamics that contribute to their uniqueness.
+
+Suppose you analyze the data from Group 2 hypothesis and find that in most countries, high earnings among YouTube channels are relatively rare. However, South Korea stands out with a significantly higher probability of channels earning over $80 million annually, even when considering the education and employment factors. This example demonstrates the rarity of high earnings in South Korea compared to other countries, supporting the hypothesis that specific economic conditions in South Korea contribute to this uniqueness. However, since this isn't the case as seen in analyzing Group 2, we can say that the rarity of high earnings in certain countries isn't attributed to their education and employment factors. But when looking into Group 1, it is rare to find Youtube channels above 10 million in their respective categories apart from 'Shows'. Therefore, Group 1 is more rare than Group 2 considering the hypothesis of both groups. 
+
+A possible anomaly:
+
+It is intriguing to note that countries with the highest levels of education and job opportunities, logically expected to yield higher earnings for YouTubers, do not consistently demonstrate a probability of having high earnings. This anomaly raises questions about the complex interplay of factors influencing content creators' earnings across different countries.
+
+Finding Combinations:
+
+1. 'channel_type' and 'category'
+Lets look at some combinations between these two variables. One thing to consider about these variables is that many times, both the channel_type and category are the same. For example, channel type 'Music' is mapped to category 'Music'.
+
+Some questions to ask:
+- Which combinations never show up? Why might that be?
+  The combination 'Games' and 'News&Politics' never show up because the channel type 'Gaming' is in no way related to   the categories of news or politics. Similarly, the combination 'Sports' and 'Pets&Animals' don't show up for the 
+  same reason.
+  
+- Which combinations are the most/least common, and why might that be?
+  The most common combination is 'Entertainment' and 'Entertainment' because most YouTube channels cover the
+  entertainment category. The least common combination is 'Autos' and 'Autos & Vehicles' due to the smaller number of
+  YouTube channels in the top 1000 that cover topics related to Autos & Vehicles.
+
+This presence of these combinations can be found by plotting a scatter plot between 'channel_type' and 'category'.
+```{r}
+youtube|>
+  ggplot()+
+  geom_point(mapping=aes(x=category,y=channel_type))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+2. 'Country' and 'category'
+Lets look at some combinations between these two variables.
+
+Some questions to ask:
+- Which combinations never show up? Why might that be?
+  'China' and 'Afghanistan' have only one combination with one category. They don't have any other combination. This 
+  can be due to China's ban on YouTube, and also the invasion of the Taliban in Afghanistan which thus has resulted in
+  their absence of the Internet.
+  
+- Which combinations are the most/least common, and why might that be?
+  The most common combination is 'United States' and 'Entertainment' because most Youtube channels originate from the
+  United States and most Youtube channels cover the entertainment category. The least common combination is 
+  'Afghanistan' and 'Music', and 'China' and 'Howto & Style'. These two combinations occur once. And the reason being
+  the same mentioned in the first point.
+
+This presence of these combinations can be found by plotting a scatter plot between 'Country' and 'category'.
+```{r}
+youtube|>
+  ggplot()+
+  geom_point(mapping=aes(x=Country,y=category))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The prevalence of these combinations can be found by plotting a bar plot between 'Country' and 'category'.
+```{r}
+youtube |>
+  ggplot() +
+  geom_bar(mapping = aes(x = Country,fill=channel_type))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+Conclusion of the Data Dive: This data dive provides insights into the probabilities of various groups within the YouTube dataset and sheds light on the rarity of certain conditions or combinations.It also gives insight into some combination analysis between few categorical variables within the dataset.

@@ -1,0 +1,347 @@
+---
+title: "Week 8 Data Dive"
+output: html_document
+date: "2023-10-23"
+---
+
+```{r}
+library(tidyverse)
+library(boot)
+library(binom)
+library(dplyr)
+library(knitr)
+library(pwrss)
+library(effsize)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+**ANOVA TEST**
+
+Given we have a dataset that ranks the top Youtube Channels in the globe, the main value that dictates this rank system will be the number of subscribers. This value will be the most common aspect viewers will look forward to when they want to know who are the top Youtubers.**Therefore, we shall be taking 'subscribers' as our response variable.**
+
+One explanatory variable we can take into account with respect to subscribers can be 'channel_type' as it influences the number of subscribers for a youtube channel in a significant way. 
+
+Since there are more than 10 categories for channel types, we are consolidating common categories to ease our process of doing the ANOVA test.
+```{r}
+library(dplyr)
+
+youtube <- youtube |>
+  mutate(Consolidated_Type = case_when(
+    channel_type %in% c("Entertainment", "Music", "Film", "Comedy") ~ "Entertainment",
+    channel_type %in% c("Education") ~ "Education",
+    channel_type %in% c("Tech") ~ "Technology",
+    TRUE ~ "Other"
+  ))
+
+```
+
+Let us visualize box plots for these consolidated channel types with respect to number of subscribers.
+```{r}
+youtube |>
+  ggplot() +
+  geom_boxplot(mapping = aes(y = subscribers, x = Consolidated_Type)) +
+  scale_y_log10(labels = \(x) paste(x / 100000, 'M')) +
+  annotation_logticks(sides = 'l') +
+  labs(x = "Channel Type",
+       y = "Number of subscribers (in millions") +
+  theme_minimal()
+```
+
+We can see that some of these channel types are very slightly than others, but we want to know if the differences are large enough to significantly challenge our hypothesis that they're actually all basically the same. So, in this case, our null hypothesis test is
+
+$$
+H_0 : \text{average subscribers is equal across all channel types}
+$$
+
+Before we go forward with the ANOVA Test, we must make sure a few assumptions hold:
+
+1.  **Independence**. Each data point must be independent of every other data point.
+It is visible that each data point among the channel types is independent of the other. So this assumption holds.
+
+2.  **Normality.** The distribution of within each group must be roughly normal. (E.g., imagine making a histogram for each group.)
+```{r}
+youtube|>
+  filter(Consolidated_Type=="Education")|>
+  ggplot() +
+  geom_histogram(mapping = aes(x = subscribers), color = 'white', fill = 'blue', bins = 30)+
+  labs(
+    title = "Distribution of Subscribers for Education Channels",
+    x = "Subscribers",
+    y = "Frequency"
+  )
+
+youtube|>
+  filter(Consolidated_Type=="Entertainment")|>
+  ggplot() +
+  geom_histogram(mapping = aes(x = subscribers), color = 'white', fill = 'blue', bins = 30)+
+  labs(
+    title = "Distribution of Subscribers for Entertainment Channels",
+    x = "Subscribers",
+    y = "Frequency"
+  )
+
+youtube|>
+  filter(Consolidated_Type=="Other")|>
+  ggplot() +
+  geom_histogram(mapping = aes(x = subscribers), color = 'white', fill = 'blue', bins = 30)+
+  labs(
+    title = "Distribution of Subscribers for Other Channels",
+    x = "Subscribers",
+    y = "Frequency"
+  )
+
+youtube|>
+  filter(Consolidated_Type=="Technology")|>
+  ggplot() +
+  geom_histogram(mapping = aes(x = subscribers), color = 'white', fill = 'blue', bins = 30)+
+  labs(
+    title = "Distribution of Subscribers for Technology Channels",
+    x = "Subscribers",
+    y = "Frequency"
+  )
+```
+
+
+We notice all graphs except "Technology" are right-tailed distributions. Hence, this assumption doesn't entirely hold.
+
+3.  **Homoscedasticity** **(Constant Variance)**. The variance of data within groups remains consistent for every group. (I.e., no group has a significantly higher standard deviation than any other group.)
+
+```{r}
+# Filter the data by each group
+education_group <- youtube[youtube$Consolidated_Type == "Education", ]
+entertainment_group <- youtube[youtube$Consolidated_Type == "Entertainment", ]
+other_group <- youtube[youtube$Consolidated_Type == "Other", ]
+technology_group <- youtube[youtube$Consolidated_Type == "Technology", ]
+
+# Calculate the variance within each group
+variance_education <- var(education_group$subscribers)
+variance_entertainment <- var(entertainment_group$subscribers)
+variance_other <- var(other_group$subscribers)
+variance_technology <- var(technology_group$subscribers)
+
+# Print the variances
+cat("Standard deviation within Education group:", sqrt(variance_education), "\n")
+cat("Standard deviation within Entertainment group:", sqrt(variance_entertainment), "\n")
+cat("Standard deviation within Other group:", sqrt(variance_other), "\n")
+cat("Standard deviation within Technology group:", sqrt(variance_technology), "\n")
+
+```
+
+From this, we can see that there is actually some difference in standard deviations among the groups. "Education", "Entertainment" and "Other" are not too far off. However, "Technology" is significantly different.
+
+**We see not all assumptions hold. But we shall go forward to explore the hypothesis.**
+
+Let us a visualize a f-distribution graph to compare the variation between group means to the variation within the groups.
+```{r}
+n <- nrow(youtube)
+k <- n_distinct(youtube$Consolidated_Type)
+
+ggplot() +
+  geom_function(xlim = c(0, 10), 
+                fun = \(x) df(x, k - 1, n - k)) +
+  geom_vline(xintercept = 1, color = 'orange') +
+  labs(title = 'F Distribution for channel types',
+       x = "F Values",
+       y = "Probability Density") +
+  theme_minimal()
+```
+
+**From the graph we can see that the long tail is on the right side of the distribution. This represents larger F-statistics, indicating greater variation between groups compared to within groups.** We will get more proof upon testing for ANOVA below.
+
+```{r}
+m <- aov(subscribers ~ Consolidated_Type, data = youtube)
+summary(m)
+```
+
+The p-value (0.0133) is less than the typical significance level of 0.05. This suggests that there is some evidence of a significant difference in the number of subscribers between the consolidated channel types. You can conclude that the consolidated channel type has a statistically significant effect on the number of subscribers. A high F value (3.593) with a small p-value suggests that there are significant group differences
+
+**This ANOVA suggests that there are significant differences in the number of subscribers among different consolidated channel types, and you can proceed with further post-hoc tests or specific analyses to understand which consolidated channel types differ from each other in terms of subscribers.**Therefore, we reject our null hypothesis and come up with our alternative hypothesis:
+
+$$
+H_a : \text{average subscribers is not equal across all channel types}
+$$
+
+To determine *which one* is most unlikely to be the same as the rest, we can use multiple pairwise t-tests to compare each group (rows) to each other group (columns).
+```{r}
+pairwise.t.test(youtube$subscribers, youtube$Consolidated_Type, p.adjust.method = "bonferroni")
+```
+
+Interpretations from the pair-wise t-test:
+
+- in the "Education" row, the p-value for the comparison with "Entertainment" is 1.000, which indicates no significant difference.
+
+- In the "Other" row, the p-value for the comparison with "Entertainment" is 0.033. This p-value suggests a significant difference at a conventional significance level
+
+- The p-value for the comparison between "Education" and "Other" is 0.170. This indicates marginally significant difference in the number of subscribers between these groups.
+
+- The p-value for the comparison between "Technology" and "Education" is 0.715, indicating no significant difference in the number of subscribers between these groups.
+
+**LINEAR REGRESSION**
+
+Let us choose one other continuous (or ordered integer) column of data that might influence the response variable. In this case, we shall choose video views as the subscriber count of a channel highly its influences video views.
+
+*Since there are few Youtube channels with 0 video views (These channels belong to YouTube and don't post anything), we shall be removing them so that it doesn't hinder our observations.*
+
+```{r}
+youtube <- youtube |>
+  filter(`video views` != 0)
+```
+
+Let us first visualize the graph between suscribers and video views.
+```{r}
+youtube |>
+  ggplot(mapping = aes(x = subscribers, y = `video views`)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = 'darkblue') + 
+  theme_minimal()
+```
+
+We can see that as subscribers increase, video views does increase. It seems to be roughly linear. But to evaluate its fit, it is better to create a linear regression model and assess its summary values.
+
+Let us build a linear regression for subscribers and video views, and evaluate its fit.
+```{r}
+# Build the linear regression model
+model <- lm(subscribers ~ `video views`, data = youtube)
+# Summarize the model
+summary(model)
+```
+
+**The multiple R-squared is approximately 0.6794, indicating that about 67.94% of the variance 0in the number of subscribers is explained by the linear relationship with video_views. This is a relatively good fit, suggesting that the model captures a substantial portion of the variation in subscribers. The F-statistic is significant (p-value: < 2.2e-16), indicating that the model as a whole is significant.the model appears to have a reasonably good fit, as evidenced by the significant F-statistic and the high R-squared value. It explains a significant portion of the variation in the number of subscribers. **
+
+Let us do an appropriate hypothesis test to see whether the model as a whole is significant. 
+**Hypothesis Test for the Significance of the Model**
+
+$$
+H_0:\text{The model does not explain any variance in the response variable (subscribers).}
+$$
+
+$$
+H_a: \text{The model does explain some variance in the response variable.}
+$$
+
+We perform and interpret the F-statistic test for the significance of the model. The result will indicate whether the model, as a whole, is a significant predictor of the number of subscribers.
+```{r}
+# Build the linear regression model
+model <- lm(subscribers ~`video views`, data = youtube)
+
+# Perform the F-statistic test for the significance of the model
+f_test <- summary(model)$fstatistic
+
+# Extract the F-statistic and its associated p-value
+f_statistic <- f_test[1]
+p_value <- pf(f_statistic, f_test[2], f_test[3], lower.tail = FALSE)
+
+# Display the F-statistic and p-value
+cat("F-statistic:", f_statistic, "\n")
+cat("P-value:", format(p_value, scientific = TRUE), "\n")
+
+# Determine the significance based on the p-value
+if (p_value < 0.05) {
+  cat("The model is significant (Reject the null hypothesis).\n")
+} else {
+  cat("The model is not significant (Fail to reject the null hypothesis).\n")
+}
+```
+
+Results: 
+
+- The F-statistic is highly significant, indicating that the model, as a whole, is a significant predictor of the number of subscribers.
+
+- The extremely low p-value (practically zero) provides strong evidence to reject the null hypothesis, which states that the model does not explain any variance in the response variable. Thus, we reject the null hypothesis.
+
+
+Let us use diagnostic plots to identify any issues with our model.
+```{r}
+# Build the linear regression model
+model <- lm(subscribers ~ `video views`, data = youtube)
+
+# Create diagnostic plots
+par(mfrow = c(2, 2))  # Set up a 2x2 grid for multiple plots
+
+# Plot 1: Residuals vs. Fitted Values (Checking for Linearity)
+plot(model, which = 1)
+
+# Plot 2: Normal Q-Q Plot (Checking for Normality of Residuals)
+plot(model, which = 2)
+
+# Plot 3: Scale-Location Plot (Checking for Homoscedasticity)
+plot(model, which = 3)
+
+# Plot 4: Residuals vs. Leverage (Checking for Outliers)
+plot(model, which = 5)
+
+# Reset the graphics parameters
+par(mfrow = c(1, 1))
+
+```
+
+Interpretation:
+1. Residuals vs. Fitted: We see random scatter points with no clear pattern. This suggests linearity. Therefore, we don't have any issues with showing linearity in this linear regression model.
+
+2. Normal Q-Q Plot: We notice a slight deviation that results in a curve. This could be caused by outliers or influential points in our data which can be assessed better in the Residuals vs Leverage graph. In the end, we understand the residuals aren't normally distributed which results in the slight curve. This can be considered as a small issue.
+
+3. Scale-Location: We see that the the points are randomly scattered, with no clear fan shape. This means the spread of residuals is consistent and there is no issue with homoscedasticity.
+
+4. Residuals vs. Leverage: We see there are no points outside the dashed line. This means that there are no influential points. However, since there is a point very close to reaching the outside of the dashed line, we could see this as a small hinderance towards the normality of residuals which was seen in 'Normal Q-Q Points'.
+
+**Hence from the diagnostic plots, we don't see any alarming issue with our model apart from the slight deviation of normality.**
+
+Interpreting coefficients of my model:
+```{r}
+model$coefficients
+```
+
+**In the context of our data:**
+
+The coefficient for video views is highly statistically significant (p-value < 2e-16), indicating a strong relationship between video views and subscribers.
+
+The positive coefficient for video views suggests that as the number of video views increases, the number of subscribers is expected to increase as well.
+
+**Recommendations:**
+
+- While the model provides insights into the relationship between video views and subscribers, its important to keep in mind that the intercept's practical interpretation may not be meaningful, as it's unlikely to have zero views. Focus on the slope coefficient for practical recommendations.
+
+- our goal is to grow the number of subscribers to your YouTube channel, strategies that lead to more video views could be effective.
+
+**Adding another variable to our regression model. We add "Consolidated_Type" from our ANOVA Test.**
+```{r}
+# Build the linear regression model with 'video views' and 'Consolidated_Type' as predictors
+model <- lm(subscribers ~ `video views` + Consolidated_Type, data = youtube)
+
+# View the summary of the model
+summary(model)
+```
+
+Evaluation with respect to previous model:
+
+- The R-squared value for the model with Consolidated_Type is slightly higher (0.6804) compared to the initial model (0.6794), suggesting that the addition of channel type as a predictor explains a slightly larger proportion of the variation in subscribers.
+
+- In both models, the coefficient for video views is highly significant, indicating a strong relationship between video views and subscribers.
+
+- The addition of Consolidated_Type as a predictor provides additional information about the impact of channel types on subscribers.
+
+**Adding interaction term "created_month" **
+```{r}
+# Build the linear regression model with 'video views', 'uploads', and 'Consolidated_Type' as predictors
+model <- lm(subscribers ~ `video views` * created_month + Consolidated_Type, data = youtube)
+summary(model)
+```
+
+Reason "created_month" was included is becuase seasonal effects or patterns can impact the number of subscribers to a channel. By adding interaction terms between video views and created_month, we allow the effect of video views on subscribers to vary by month.
+
+*Evaluations:*
+
+- The multiple R-squared is 0.6919, indicating that the model explains about 69.19% of the variance in subscribers. The multiple R-squared is 0.6919, indicating that the model explains about 69.19% of the variance in subscribers.
+
+- Some of these interaction terms are statistically significant, such as video views:created_monthJan, which is significant at the 0.05 level (p-value: 0.01789), and video views:created_monthJul, which is significant at the 0.01 level (p-value: 0.00217).
+
+- Including interaction terms for created_month can be particularly useful when we have a prior reason to believe that seasonality or other temporal factors might affect our response variable "subscribers", and you want our model to capture and account for these variations.
+
+**Conclusion of our data dive:**
+
+In this data dive, we conducted a comprehensive analysis of a dataset containing information about the top YouTube channels worldwide. Our primary objective was to understand the factors influencing the number of subscribers to these channels. We began with an ANOVA test to evaluate whether different channel types significantly impacted subscriber counts. Subsequently, we performed linear regression modeling to explore the relationship between subscribers and video views, with diagnostic plots confirming the model's suitability. Further analysis included extending the regression model with "Consolidated_Type" as a predictor and adding interaction terms with "created_month" to account for seasonal effects. Our findings revealed that video views, channel type, and seasonality all play important roles in predicting subscriber counts, providing valuable insights for content creators and marketers seeking to optimize their YouTube channels.

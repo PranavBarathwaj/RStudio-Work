@@ -1,0 +1,199 @@
+---
+title: "Week 10 Data Dive"
+output: html_document
+date: "2023-10-24"
+---
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+library(broom)
+library(lindia)
+library(car)
+library(MASS)
+library(ggplot2)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+
+#Since there are few Youtube channels with 0 uploads (These channels belong to YouTube and don't post anything), we shall be removing them so that it doesn't hinder our observations.
+youtube <- youtube |>
+  filter(`video views` != 0)
+```
+
+**Before getting into logistic regression, let us first transform our response variable before making it a binary response variable. In this case, our response variable is 'subscribers' and explanatory variables is 'video views'.**
+
+Creating graph to visualize the relation between subscribers and video views.
+```{r}
+model <- lm(youtube$subscribers ~ youtube$`video views` )
+
+rsquared <- summary(model)$r.squared
+
+youtube |> 
+  ggplot(mapping = aes(x = `video views`, 
+                       y = subscribers)) +
+  geom_point() +
+  geom_smooth(method = 'lm', color = 'gray', linetype = 'dashed', 
+              se = FALSE) +
+  geom_smooth(se = FALSE) +
+  labs(title = "subscribers vs. videoviews",
+       subtitle = paste("Linear Fit R-Squared =", round(rsquared, 3))) +
+  theme_classic()
+```
+
+We see that there the dashed lines suggest there is a positive linear relationship. It at least lets us know that for most channels, more video views dictates more subscriber. But we shall explore this more later. 
+
+Let us find the lambda value to understand how we can transform our response variable.
+```{r}
+pT <- powerTransform(model, family="bcPower")
+pT$lambda
+```
+
+Since our lambda value of -0.82 is close to -1, we shall transform subscribers to 1/subscribers and create a visualization to showcase the relation between the newly transformed response variable and explanatory variable.
+```{r}
+youtube <- youtube |>
+  mutate(l_sub = 1/subscribers)  # calculate 1/subscribers
+
+model <- lm(youtube$l_sub ~ youtube$`video views`)
+
+rsquared <- summary(model)$r.squared
+
+youtube |> 
+  ggplot(mapping = aes(x = `video views`, 
+                       y = l_sub)) +
+  geom_point() +
+  geom_smooth(method = 'lm', color = 'gray', linetype = 'dashed',
+              se = FALSE) +
+  labs(title = "subscribers vs. videoviews",
+       subtitle = paste("Linear Fit R-Squared =", round(rsquared, 3))) +
+  theme_classic()
+```
+
+The graph indicates a negative linear relationship.
+
+```{r}
+plots <- gg_diagnose(model, plot.all = FALSE)
+plot_all(plots[c('res_fitted', 'qqplot')], max.per.page = 1)
+```
+
+**LOGISTIC REGRESSION**
+
+Now we are going to create a logistic regression model using a binary response variable 'subscribers_div' with explanatory variable 'video views'.
+
+First let us create our binary response variable using our transformed variable 'l_sub'. 
+```{r}
+library(dplyr)
+
+youtube <- youtube |>
+  mutate(subscribers_div = ifelse(l_sub > 5.650e-08, 1, 0))
+```
+
+Before we go into the creation of the model, let us create a visualization of our binary response variable and explanatory variable.
+```{r}
+youtube |>
+  ggplot(mapping = aes(x = `video views`, y = subscribers_div)) +
+  geom_jitter(width = 0, height = 0.1, shape = 'O', size = 3) +
+  geom_smooth(method = 'lm', se = FALSE) + 
+  scale_y_continuous(breaks = c(0, 1)) +
+  theme_minimal()
+```
+
+We see that there are more 0's than 1's here maybe due to inverse created by transforming the original response variable.
+
+```{r}
+model <- glm(subscribers_div ~ `video views`, data = youtube,
+             family = binomial(link = 'logit'))
+
+model$coefficients
+```
+
+Interpretation of coefficients:
+
+-  Intercept (1.719022e+00): This is the estimated log-odds of success when "video views" is equal to zero. In a logistic regression model, the intercept is typically less interpretable, especially in cases like this where "video views" can't practically be zero. You can exponentiate this value to get the odds ratio, but it may not have a meaningful interpretation in our context.
+
+- Coefficient for "video views" (-1.895708e-10): This coefficient represents how a one-unit increase in "video views" affects the log-odds of success in "subscribers_div." However, the extremely small value (-1.895708e-10) indicates that "video views" has a very weak or negligible effect on the log-odds of success.
+
+- The model suggests that "video views" is not a meaningful predictor of "subscribers_div" in our logistic regression. The coefficient for "video views" is extremely close to zero, indicating a negligible effect. This could be due to various factors, including the nature of the data and the model's limitations.
+
+**Let us try another explanatory variable 'uploads' to judge the model**
+```{r}
+model <- glm(subscribers_div ~ `video views`+uploads, data = youtube,
+             family = binomial(link = 'logit'))
+
+model$coefficients
+```
+
+The coefficient for uploads represents how a one-unit increase in "uploads" affects the log-odds of success in "subscribers_div." The coefficient is positive, indicating that as "uploads" increase by one unit, the log-odds of success also increase.
+
+**BONUS** (Using the Standard Error for at least one coefficient, build a C.I. for that coefficient, and interpret its meaning) Here we are using 'video views'.
+```{r}
+model_summary <- summary(model)
+
+# Extract the standard error for the coefficient of "video views"
+se_video_views <- model_summary$coefficients["`video views`", "Std. Error"]
+
+# Coefficient for "video views"
+coefficient <- -1.895708e-10
+
+# Margin of error (MOE) for a 95% confidence interval
+MOE <- 1.96 * se_video_views  # Assuming a 95% confidence level
+
+# Calculate the confidence interval
+lower_bound <- coefficient - MOE
+upper_bound <- coefficient + MOE
+
+# Print the confidence interval
+cat("95% Confidence Interval: (", lower_bound, ", ", upper_bound, ")\n")
+```
+
+Interpretation of our intervals:
+
+- This interval suggests that we can be 95% confident that the true effect of "video views" on the log-odds of success in "subscribers_div" falls within the range of approximately -2.188396e-10 to -1.60302e-10.
+
+- The magnitude of the coefficient, while statistically significant, is extremely small (in the order of e-10). This implies that, while there is a statistically significant relationship between "video views" and "subscribers_div," the practical impact is minuscule. It may not be meaningful or practically significant in real-world terms.
+
+**TRANSFORMING EXPLANATORY VARIABLE (video views)**
+```{r}
+youtube|>
+  ggplot() +
+  geom_histogram(mapping = aes(x = `video views`), color = 'white', fill = 'blue', bins = 30)+
+  labs(
+    title = "Distribution of Subscribers for Other Channels",
+    x = "views",
+    y = "Frequency")
+  
+```
+
+From the graph we see that the explanatory variable 'video views' is highly skewed towards the right. Therefore, we are going to apply the log transformation for this variable.
+
+```{r}
+youtube |>
+  ggplot(mapping = aes(x = log(`video views`), y = subscribers_div)) +
+  geom_jitter(width = 0, height = 0.1, shape = 'O', size = 3) +
+  geom_smooth(method = 'lm', se = FALSE) + 
+  scale_y_continuous(breaks = c(0, 1)) +
+  theme_minimal()
+
+model <- glm(subscribers_div ~ log(`video views`), data = youtube, family = binomial(link = 'logit'))
+
+model$coefficients
+```
+
+**From our graph and result, we see that this transformation is needed because it compresses extreme values and explanatory variable does show some effect on the model unlike the previous interpretation where it had negligible effect. **
+
+Intepretation of coefficient:
+
+- The coefficient for the log-transformed "video views" is approximately -1.2265. This coefficient represents the change in the log odds of the response variable for a one-unit change in the log-transformed "video views." Specifically, a one-unit increase in the log of "video views" results in a decrease of approximately 1.2265 in the log odds of subscribers_div.
+
+**Conclusion of Data Dive:**
+
+In this data dive, we explored the relationship between YouTube channel "subscribers" and "video views" using logistic regression. Initially, we transformed the response variable by taking its reciprocal, creating a binary variable "subscribers_div." We observed that there was a positive linear relationship between "video views" and "subscribers_div" on the original scale. However, due to the skewed distribution of "video views," we applied a logarithmic transformation.
+
+After the transformation, the logistic regression model showed a meaningful relationship. The coefficient for log-transformed "video views" was approximately -1.2265, indicating that a one-unit increase in the log of "video views" resulted in a decrease of about 1.2265 in the log odds of "subscribers_div." This suggested that as "video views" increased, the odds of a channel having a high number of subscribers decreased.
+
+We also briefly explored the effect of the "uploads" variable and found a positive relationship. However, the practical impact of "video views" was statistically significant but relatively small. The confidence interval for this coefficient was extremely narrow due to the large dataset, highlighting its statistical significance, but the effect size remained modest.
+
+In summary, the log-transformed "video views" proved to be a more informative explanatory variable, and it demonstrated a significant but subtle impact on the odds of having a high number of subscribers for YouTube channels. Further analysis could consider additional variables and model improvement for a more comprehensive understanding of subscriber acquisition.

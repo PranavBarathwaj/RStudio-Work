@@ -1,0 +1,153 @@
+---
+title: "Week 11 Data Dive"
+output: html_document
+date: "2023-11-06"
+---
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+library(broom)
+library(lindia)
+library(car)
+library(MASS)
+library(ggplot2)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+
+#Since there are few Youtube channels with 0 uploads (These channels belong to YouTube and don't post anything), we shall be removing them so that it doesn't hinder our observations.
+youtube <- youtube |>
+  filter(`video views` != 0)
+```
+
+
+For this week's data dive, for our GLM, we are going to work on a **Poisson Regression model.** Just like how we used subscribers and video views as our response and explanatory variable last week for logistic regression, we shall use them for our poisson regression model.
+
+Before that, let us first visualize both variables.
+```{r}
+youtube |>
+  ggplot(mapping = aes(x = subscribers)) +
+  geom_histogram(color = 'white', bins = 30) +  # Specify the number of bins with 'bins'
+  labs(title = "Histogram of subscribers in YouTube channels") +  # Use 'title' instead of 'labs'
+  theme_hc()
+
+youtube |>
+  ggplot(mapping = aes(x = `video views`)) +
+  geom_histogram(color = 'white', bins=30) +
+  labs("Histogram of video views in Youtube channels") +
+  theme_hc()
+```
+
+From both graphs, we can clearly notice both variables follow a poisson distribution. Hence, it would be optimal to use them in a poisson regression model.
+
+**Before getting into poisson regression, let us first transform our response variable. In this case, our response variable is 'subscribers' and explanatory variables is 'video views'.**
+
+Creating graph to visualize the relation between subscribers and video views.
+```{r}
+model <- lm(youtube$subscribers ~ youtube$`video views`)
+
+rsquared <- summary(model)$r.squared
+
+youtube |> 
+  ggplot(mapping = aes(x = `video views`, 
+                       y = subscribers)) +
+  geom_point() +
+  geom_smooth(method = 'lm', color = 'gray', linetype = 'dashed', 
+              se = FALSE) +
+  geom_smooth(se = FALSE) +
+  labs(title = "subscribers vs. videoviews",
+       subtitle = paste("Linear Fit R-Squared =", round(rsquared, 3))) +
+  theme_classic()
+```
+
+We see that there the dashed lines suggest there is a positive linear relationship. It at least lets us know that for most channels, more video views dictates more subscriber. But we shall explore this more later. 
+
+Let us find the lambda value to understand how we can transform our response variable.
+```{r}
+pT <- powerTransform(model, family="bcPower")
+pT$lambda
+```
+
+Since our lambda value of -0.82 is close to -1, we shall transform subscribers to 1/subscribers and video views to log(video views), and create a visualization to showcase the relation between the newly transformed response variable and explanatory variable.
+```{r}
+youtube <- youtube |>
+  mutate(l_sub = 1/subscribers)  # calculate 1/subscribers
+
+model <- lm(youtube$l_sub ~ log(youtube$`video views`))
+
+rsquared <- summary(model)$r.squared
+
+youtube |> 
+  ggplot(mapping = aes(x = log(`video views`), 
+                       y = l_sub)) +
+  geom_point() +
+  geom_smooth(method = 'lm', color = 'gray', linetype = 'dashed',
+              se = FALSE) +
+  labs(title = "1/subscribers vs. log(videoviews)",
+       subtitle = paste("Linear Fit R-Squared =", round(rsquared, 3))) +
+  theme_classic()
+```
+
+**POISSON REGRESSION**
+
+For our poisson regression model, we have transformed our response variable and also our explanatory variable to log(video views)
+```{r}
+model <- glm(l_sub ~ log(`video views`), data = youtube, 
+             family = poisson(link = 'log'))
+
+model$coefficients
+```
+
+Interpretation of coefficients:
+
+- Intercept (-14.2034): The intercept represents the expected value of l_sub when log(video views) is 0.
+In this context, it implies that when there are no video views (log(0)), the expected value of the inverse of subscribers (l_sub) is extremely low (close to 0). This makes sense because having no video views would suggest no subscribers.
+
+- The coefficient for log(video views) (-0.1118) represents the estimated change in the logarithm of subscribers for a one-unit increase in the logarithm of video views while holding all other variables constant.If you want the effect in the original scale, you would need to exponentiate the coefficient.
+
+- In this case, exp(-0.1118) is approximately 0.8947, which means that, on average, a 1% increase in video views is associated with an 11.53% decrease in subscribers (1 - 0.8947 ≈ 0.1153).
+
+**Let us use diagnostic plots to identify any issues with our model.**
+```{r}
+# Create diagnostic plots
+par(mfrow = c(2, 2))  # Set up a 2x2 grid for multiple plots
+
+# Plot 1: Residuals vs. Fitted Values (Checking for Linearity)
+plot(model, which = 1)
+
+# Plot 2: Normal Q-Q Plot (Checking for Normality of Residuals)
+plot(model, which = 2)
+
+# Plot 3: Scale-Location Plot (Checking for Homoscedasticity)
+plot(model, which = 3)
+
+# Plot 4: Residuals vs. Leverage (Checking for Outliers)
+plot(model, which = 5)
+
+# Reset the graphics parameters
+par(mfrow = c(1, 1))
+
+```
+
+Interpretation:
+1. Residuals vs. Fitted: We see random scatter points with no clear pattern around the horizontal line. This suggests that the assumption of linearity is reasonable. 
+
+2. Normal Q-Q Plot: We notice the points closely follow a diagonal line. This suggests that the residuals are approximately normally distributed, which is a desirable property for many statistical tests. However, there is a slight deviation that results in a curve. This could be caused by outliers or influential points in our data which can be assessed better in the Residuals vs Leverage graph. 
+
+3. Scale-Location: A horizontal line in a scale-location plot indicates relatively constant spread or variance of the residuals across different levels of the predictor variable, which is a desirable property. Since we don't have a horizontal line, it indicates heteroscedasticity, meaning that the variance of the residuals is not constant, and it may vary systematically with the predictor variable.
+
+4. Residuals vs. Leverage: We see there are no points outside the dashed line (Cook's distance). This means that there are no influential points. However, since there is a point very close to reaching the outside of the dashed line, we could see this as a small hinderance towards the normality of residuals which was seen in 'Normal Q-Q Points'.
+
+**Hence from the diagnostic plots, we see the problem of heteroscedasticity. This issue can lead to inefficient parameter estimates and incorrect p-values in hypothesis tests. To address heteroscedasticity, we may need to explore data transformations or other modeling techniques to better capture the relationship between the response variable and the predictor variable, taking into account the changing variance. Apart from this issue, we see a slight deviation of normality which is not an alarming issue.**
+
+**Conclusion of data dive:**
+
+In this data dive, we conducted a Poisson Regression analysis using YouTube data to explore the relationship between subscribers and video views. We began by visualizing the distributions of subscribers and video views, and it was evident that both variables followed a Poisson distribution.
+
+To better fit our model, we transformed the response variable 'subscribers' to 1/subscribers and the explanatory variable 'video views' to log(video views). We then created a visualization to showcase the relationship between these transformed variables, which appeared to have a positive linear association.
+
+The diagnostic plots indicated potential issues with heteroscedasticity, which could lead to inefficient parameter estimates and incorrect p-values. Addressing this issue may require further data transformations or alternative modeling techniques to capture the changing variance more accurately. Additionally, the slight deviation from normality of residuals is not a significant concern in this analysis.

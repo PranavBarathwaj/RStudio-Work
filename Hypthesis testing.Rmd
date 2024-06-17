@@ -1,0 +1,360 @@
+---
+title: "Week 7 Data Dive"
+output: html_document
+date: "2023-10-03"
+---
+Importing libraries to run.
+
+```{r}
+library(tidyverse)
+library(boot)
+library(binom)
+library(dplyr)
+library(knitr)
+library(pwrss)
+library(effsize)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+**1. Devising first null hypothesis and testing on it** 
+
+$$
+H_0: \text{Mean of subscribers for Youtube channels created in the year 2016 is equal to the mean of subscribers for Youtube channels created in the year 2017.}
+$$
+
+Creating vectors that contain subscriber count of Youtube channels created in 2016 and 2017.
+```{r}
+subs_2016 <- youtube|>
+  filter(created_year == 2016) |>
+  select("subscribers")
+subs_2016
+
+subs_2017 <- youtube|>
+  filter(created_year == 2017) |>
+  select("subscribers")
+subs_2017
+```
+
+Finding the means and standard deviations of the vectors to calculate the sample size.
+```{r}
+sd_2016<-sd(subs_2016[["subscribers"]])
+mean_2016<-mean(subs_2016[["subscribers"]])
+sd_2017<-sd(subs_2017[["subscribers"]])
+mean_2017<-mean(subs_2017[["subscribers"]])
+```
+
+Finding minimum effect size using cohen.d
+```{r}
+cohen.d(d = filter(youtube, created_year==2016) |> pluck("subscribers"),
+        f = filter(youtube, created_year==2017) |> pluck("subscribers"))
+```
+
+**Since our calculated Cohen's d is approximately 0.36, it falls into the "medium" range. Therefore, we can interpret this value as the minimum meaningful or practically significant effect size. Therefore our delta value is 0.36.**
+
+Calculating the sample size to be used for hypothesis testing. 
+```{r}
+# Define the known parameters
+alpha <- 0.05   # Alpha level (significance level)
+power <- 0.80  # Power level
+delta <- 0.36  # Minimum effect size
+
+# Define the known parameters from your data or previous knowledge
+sigma_2016 <-  sd_2016 # Standard deviation of video views in 2016
+sigma_2017 <-  sd_2017 # Standard deviation of video views in 2017
+mu_2016 <- mean_2016 # Expected mean of video views in 2016
+mu_2017 <- mean_2017 # Expected mean of video views in 2017
+
+# Calculate the critical value for alpha (one-tailed test, right-tailed)
+z_alpha <- qnorm(1 - alpha)
+# Calculate the critical value for beta (one-tailed test, right-tailed)
+z_beta <- qnorm(1 - power)
+
+# Calculate the sample size
+n <- ((2 * (z_alpha + z_beta)^2 * (sigma_2016^2 + sigma_2017^2)) / 
+      ((mu_2016 - mu_2017 - delta)^2))
+
+# Round up to the nearest whole number because sample size must be an integer
+n <- ceiling(n)
+
+# Print the calculated sample size
+cat("Required sample size:", n, "\n")
+```
+
+**We chose an alpha level of 0.05 because it's a common significance level that strikes a balance between the risk of incorrectly rejecting the null hypothesis (Type I error) and the need to detect meaningful effects. A power level of 0.80 was selected to provide an 80% probability of correctly detecting true effects , ensuring a reasonable chance of finding real differences in subscribers between the years.** 
+
+We also see that our minimum sample size is 19 which is well below our current sample size. **Hence we have enough data to perform the Neyman-Pearson hypothesis test.**
+
+Now we shall run the Neyman-Pearson hypothesis test on the minimum sample size. (One-tailed test)
+```{r}
+# Subset your data to get the required samples for the test (2016 and 2017)
+sample_2016 <- youtube$subscribers[youtube$created_year == 2016][1:n]
+sample_2017 <- youtube$subscribers[youtube$created_year == 2017][1:n]
+
+# Impute missing values with the mean of the respective samples
+sample_2016[is.na(sample_2016)] <- mean(sample_2016, na.rm = TRUE)
+sample_2017[is.na(sample_2017)] <- mean(sample_2017, na.rm = TRUE)
+
+# Calculate the test statistic (e.g., t-statistic for comparing means)
+t_statistic <- (mean(sample_2016) - mean(sample_2017)) / sqrt((var(sample_2016)/n) + (var(sample_2017)/n))
+
+# Make a decision based on the critical value and test statistic
+critical_value <- qt(1 - alpha, df = n - 1)  # For one-tailed test (right-tailed)
+
+if (!is.na(t_statistic) && !is.na(critical_value)) {
+  if (t_statistic > critical_value) {
+    cat("Reject the null hypothesis. There is a significant difference between the means.")
+  } else {
+    cat("Fail to reject the null hypothesis. There is no significant difference between the means.")
+  }
+} else {
+  cat("Error: Test statistic or critical value contains missing values.")
+}
+
+# Print the test statistic, critical value, and calculated sample size
+cat("\nTest Statistic:", t_statistic, "\n")
+cat("Critical Value:", critical_value, "\n")
+```
+
+**We see that the null hypothesis has been rejected. This means that we have an alternate hypothesis that states:**
+$$
+H_a: \text{Mean of subscribers for Youtube channels created in the year 2016 is not equal to the mean of subscribers for Youtube channels created in the year 2017.}
+$$
+
+Interpretation of the result: Since our calculated test statistic (2.895515) exceeds the critical value (1.734064), we can conclude that there is strong evidence to reject the null hypothesis. This suggests that there is a significant difference in the mean number of subscribers between the years 2016 and 2017, favoring one of the years over the other. The direction of the difference (whether 2016 has more subscribers than 2017 or vice versa) can be determined by the sign of the test statistic (positive in this case)
+
+Let us visualize this hypothesis test with a graph that illustrates the results with respect to the critical value, delta, power and alpha value.
+
+```{r}
+critical_value <- 1.734064
+delta <- 0.36
+
+f_0 <- function(x) dnorm(x, mean = 0)
+f_a <- function(x) dnorm(x, mean = delta)
+
+ggplot() +
+  stat_function(mapping = aes(fill = 'power'),
+                fun = f_a, 
+                xlim = c(critical_value, 4),
+                geom = "area") +
+    stat_function(mapping = aes(fill = 'alpha'),
+                fun = f_0, 
+                xlim = c(critical_value, 4),
+                geom = "area") +
+  geom_function(mapping = aes(color = 'Null Hypothesis'),
+                xlim = c(-4, 4), fun = f_0) +
+  geom_function(mapping = aes(color = 'Alternative Hypothesis'),
+                xlim = c(-4, 4), fun = f_a) +
+  geom_vline(mapping = aes(xintercept = critical_value,
+                           color = "Critical Value")) +
+  geom_vline(mapping = aes(xintercept = delta,
+                           color = "Delta")) +
+  geom_vline(mapping = aes(xintercept = 0),
+             color = 'gray', linetype=2) +
+  labs(title = "One-Tailed Test Illustration",
+       subtitle = "(Mirror the right side for two-tailed tests.)",
+       x = "Test Statistic",
+       y = "Probability Density",
+       color = "",
+       fill = "") +
+  scale_x_continuous(breaks = seq(-4, 4, 1)) +
+  scale_fill_manual(values = c('lightblue', 'pink')) +
+  scale_color_manual(values = c('darkred', 'darkorange', 'darkblue', 
+                                'darkgreen')) +
+  theme_minimal()
+```
+
+The above plot helps illustrate the concepts of power (the ability to detect a significant difference under the alternative hypothesis) and alpha (the significance level, which represents the probability of a Type I error) in the context of a one-tailed Neyman hypothesis test as done before. It shows how the test statistic compares to the critical value and the assumed means under both hypotheses.
+
+
+We create a contingency table consisting of the mean of uploads and maximum uploads of India and USA so that we can apply to fisher's test.
+```{r}
+combined_contingency_table <- data.frame(Mean = c(mean_2016,mean_2017), Minimum=c(min(subs_2016),min(subs_2017)))
+print(combined_contingency_table)
+```
+
+Implementing Fisher's Exact test
+```{r}
+fisher.test(combined_contingency_table)
+```
+
+The p-value is a measure of the evidence against the null hypothesis. A very small p-value (in this case, less than 2.2e-16, which is essentially zero) suggests strong evidence against the null hypothesis. This aligns with our results from the Neymon-Pearson test.
+
+In this context, an odds ratio of approximately 1.22761 suggests that there is a positive association between the variables, and the 95 percent confidence interval provides a range of plausible values for the true odds ratio.
+
+**2. Devising second null hypothesis and testing on it** 
+
+$$
+H_0: \text{Mean number of uploads by Youtubers in India is equal to the mean number of uploads by Youtubers in USA.}
+$$
+
+Creating vectors that contain youtube channels from India and USA with their respective uploads.
+```{r}
+total_india <- youtube|>
+  filter(Country=="India") |>
+  select(uploads)
+total_india
+
+total_usa <- youtube|>
+  filter(Country=="United States") |>
+  select(uploads)
+total_usa
+```
+
+Finding the means and standard deviations of the vectors to calcuate the sample size.
+```{r}
+sd_india<-sd(total_india[["uploads"]])
+mean_india<-mean(total_india[["uploads"]])
+sd_usa<-sd(total_usa[["uploads"]])
+mean_usa<-mean(total_usa[["uploads"]])
+```
+
+Finding minimum effect size using cohen.d
+```{r}
+cohen.d(d = filter(youtube, Country == "India") |> pluck("uploads"),
+        f = filter(youtube, Country == "United States") |> pluck("uploads"))
+```
+
+Since our calculated Cohen's d is approximately 0.51, it falls into the "medium" range. Therefore, we can interpret this value as the minimum meaningful or practically significant effect size. Therefore our delta value is 0.51.
+
+
+Calculating the sample size to be used for hypothesis testing. 
+```{r}
+# Define the known parameters
+alpha <- 0.05  # Alpha level (significance level)
+power <- 0.80  # Power level
+delta <- 0.51  # Minimum effect size
+
+# Define the known parameters from your data or previous knowledge
+sigma_india <-  sd_india # Standard deviation of video views in 2016
+sigma_usa <-  sd_usa # Standard deviation of video views in 2017
+mu_india <- mean_india # Expected mean of video views in 2016
+mu_usa <- mean_usa # Expected mean of video views in 2017
+
+# Calculate the critical values (Z scores) for alpha and beta
+z_alpha <- qnorm(1 - alpha)  # Two-tailed test
+z_beta <- qnorm(1 - power)
+
+# Calculate the sample size
+n <- ((2 * (z_alpha + z_beta)^2 * (sigma_india^2 + sigma_usa^2)) / 
+      ((mu_india - mu_usa - delta)^2))
+
+# Round up to the nearest whole number because sample size must be an integer
+n <- ceiling(n)
+
+# Print the calculated sample size
+cat("Required sample size:", n, "\n")
+```
+
+**We chose an alpha level of 0.05 because it's a common significance level that strikes a balance between the risk of incorrectly rejecting the null hypothesis (Type I error) and the need to detect meaningful effects. A power level of 0.80 was selected to provide an 80% probability of correctly detecting true effects , ensuring a reasonable chance of finding real differences in subscribers between the years.** 
+
+We also see that our minimum sample size is 14 which is well below our current sample size. **Hence we have enough data to perform the Neyman-Pearson hypothesis test.**
+
+Now we shall run the Neyman-Pearson hypothesis test on the minimum sample size. (One-tailed test)
+
+```{r}
+# Subset your data to get the required samples for the test (2016 and 2017)
+sample_india <- youtube$uploads[youtube$Country == "India"][1:n]
+sample_usa <- youtube$uploads[youtube$Country == "United States"][1:n]
+
+# Impute missing values with the mean of the respective samples
+sample_india[is.na(sample_india)] <- mean(sample_india, na.rm = TRUE)
+sample_usa[is.na(sample_usa)] <- mean(sample_usa, na.rm = TRUE)
+
+# Calculate the test statistic (e.g., t-statistic for comparing means)
+t_statistic <- (mean(sample_india) - mean(sample_usa)) / sqrt((var(sample_india)/n) + (var(sample_usa)/n))
+
+# Make a decision based on the critical value and test statistic
+critical_value <- qt(1 - alpha, df = n - 1)  # For one-tailed test (right-tailed)
+
+if (!is.na(t_statistic) && !is.na(critical_value)) {
+  if (t_statistic > critical_value) {
+    cat("Reject the null hypothesis. There is a significant difference between the means.")
+  } else {
+    cat("Fail to reject the null hypothesis. There is no significant difference between the means.")
+  }
+} else {
+  cat("Error: Test statistic or critical value contains missing values.")
+}
+
+# Print the test statistic, critical value, and calculated sample size
+cat("\nTest Statistic:", t_statistic, "\n")
+cat("Critical Value:", critical_value, "\n")
+```
+
+**We see that the null hypothesis has been rejected. This means that we have an alternate hypothesis that states:**
+$$
+H_a: \text{Mean number of uploads by Youtubers in India is not equal to the mean number of uploads by Youtubers in USA.}
+$$
+
+Interpretation of the result: Since our calculated test statistic (2.125735) exceeds the critical value (1.770933), we can conclude that there is strong evidence to reject the null hypothesis. This suggests that there is a significant difference in the mean number of uploads between India and USA, favoring India over the other. The direction of the difference (whether India has more uploads than USA or vice versa) can be determined by the sign of the test statistic (positive in this case).
+
+Let us visualize this hypothesis test with a graph that illustrates the results with respect to the critical value, delta, power and alpha value.
+
+```{r}
+critical_value <- 1.770933
+delta <- 0.51
+
+f_0 <- function(x) dnorm(x, mean = 0)
+f_a <- function(x) dnorm(x, mean = delta)
+
+ggplot() +
+  stat_function(mapping = aes(fill = 'power'),
+                fun = f_a, 
+                xlim = c(critical_value, 4),
+                geom = "area") +
+    stat_function(mapping = aes(fill = 'alpha'),
+                fun = f_0, 
+                xlim = c(critical_value, 4),
+                geom = "area") +
+  geom_function(mapping = aes(color = 'Null Hypothesis'),
+                xlim = c(-4, 4), fun = f_0) +
+  geom_function(mapping = aes(color = 'Alternative Hypothesis'),
+                xlim = c(-4, 4), fun = f_a) +
+  geom_vline(mapping = aes(xintercept = critical_value,
+                           color = "Critical Value")) +
+  geom_vline(mapping = aes(xintercept = delta,
+                           color = "Delta")) +
+  geom_vline(mapping = aes(xintercept = 0),
+             color = 'gray', linetype=2) +
+  labs(title = "One-Tailed Test Illustration",
+       subtitle = "(Mirror the right side for two-tailed tests.)",
+       x = "Test Statistic",
+       y = "Probability Density",
+       color = "",
+       fill = "") +
+  scale_x_continuous(breaks = seq(-4, 4, 1)) +
+  scale_fill_manual(values = c('lightblue', 'pink')) +
+  scale_color_manual(values = c('darkred', 'darkorange', 'darkblue', 
+                                'darkgreen')) +
+  theme_minimal()
+```
+
+The above plot helps illustrate the concepts of power (the ability to detect a significant difference under the alternative hypothesis) and alpha (the significance level, which represents the probability of a Type I error) in the context of a one-tailed Neyman hypothesis test as done before. It shows how the test statistic compares to the critical value and the assumed means under both hypotheses.
+
+We create a contingency table consisting of the mean of subscribers and minimum subscribers of 2016 and 2017 so that we can apply to fisher's test.
+```{r}
+combined_contingency_table <- data.frame(Mean = c(mean_india,mean_usa), Maximum=c(max(total_india),max(total_usa)))
+print(combined_contingency_table)
+```
+
+Implementing Fisher's Exact test
+```{r}
+fisher.test(combined_contingency_table)
+```
+
+Here we get the p-value <2.2e-16 as well. This is a measure of the evidence against the null hypothesis. A p-value less than your chosen significance level (in this case, less than 2.2e-16) suggests strong evidence against the null hypothesis. It indicates that there is a highly significant association or difference between the variables being tested.
+
+The odds ratio, along with its confidence interval, provides information about the strength and direction of this association. In this context, an odds ratio of approximately 3.564287 suggests a strong positive association, and the 95 percent confidence interval helps quantify the uncertainty around this estimate.
+
+**Conclusion of this data dive:**
+
+The first null hypothesis stated that the mean number of subscribers for YouTube channels created in the year 2016 is equal to the mean of subscribers for YouTube channels created in the year 2017. To test this hypothesis, a Neyman-Pearson hypothesis test was conducted, incorporating a sample size calculation based on Cohen's d effect size and desired power level. The results of this analysis provided compelling evidence to reject the null hypothesis. The difference in the mean number of subscribers between the two years was statistically significant, favoring one year over the other. Further visualization and Fisher's exact tests supported the significance of this difference.
+
+The second null hypothesis posited that the mean number of uploads by YouTubers in Japan is equal to the mean number of uploads by YouTubers in the United States. This hypothesis was rigorously tested, mirroring the approach taken in the first analysis. Once again, the Neyman-Pearson hypothesis test yielded substantial evidence to reject the null hypothesis. The mean number of uploads was found to be significantly different between the two countries, with India surpassing the United States. Visualization and Fisher's exact tests confirmed the statistical significance of this disparity.
+
+In conclusion, our analyses demonstrate that statistically significant differences exist in subscriber counts and upload rates across different years and countries. These findings underscore the dynamic nature of YouTube's ecosystem and emphasize the need for content creators to adapt to changing audience behaviors and preferences.

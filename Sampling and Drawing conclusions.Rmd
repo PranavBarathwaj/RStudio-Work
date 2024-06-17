@@ -1,0 +1,248 @@
+---
+title: "Week 4 Data Dive"
+output: html_document
+date: "2023-09-12"
+---
+Importing libraries to run.
+```{r}
+library(tidyverse)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+Creating first random sample of data
+```{r}
+s1<-youtube[,c("category","video views","subscribers")] 
+df1<-data.frame(sample_frac(s1,0.5,replace = TRUE))
+df1
+```
+Created a data frame from a random sample containing the columns 'category', 'video views' and 'subscribers. The sample is 50% of the data.
+
+Creating second random sample of data
+```{r}
+s2<-youtube[,c("Country","video views","subscribers")] 
+df2<-data.frame(sample_frac(s2,0.5,replace = TRUE))
+df2
+```
+Created a data frame from a random sample containing the columns 'Country', 'video views' an 'subscribers. The sample is 50% of the data.
+
+Creating third random sample of data
+```{r}
+s3<-youtube[,c("Youtuber","highest_yearly_earnings")] 
+df3<-data.frame(sample_frac(s3,0.5,replace = TRUE))
+df3
+```
+Created a data frame from a random sample containing the columns 'Youtuber' and their 'highest yearly earnings'. The sample is 50% of the data.
+
+Creating fourth random sample of data
+```{r}
+s4<-youtube[,c("Youtuber","uploads")] 
+df4<-data.frame(sample_frac(s4,0.5,replace = TRUE))
+df4
+```
+Created a data frame from a random sample containing the columns 'Youtuber' and their 'uploads'. The sample is 50% of the data.
+
+Creating fifth random sample of data
+```{r}
+s5<-youtube[,c("Youtuber","Country","created_year")] 
+df5<-data.frame(sample_frac(s5,0.5,replace = TRUE))
+df5
+```
+Created a data frame from a random sample containing the columns 'Youtuber', their 'Country' and 'created_year'. The sample is 50% of the data.
+
+Creating sixth random sample of data
+```{r}
+s6<-youtube[,c("Youtuber","category","created_year")] 
+df6<-data.frame(sample_frac(s6,0.5,replace = TRUE))
+df6
+```
+Created a data frame from a random sample containing the columns 'Youtuber', their 'category' and 'created_year'. The sample is 50% of the data.
+
+Columns used for creating random samples:
+1.Category 
+2.Video Views 
+3.Subscribers 
+4.Country 
+5.Youtuber 
+6.highest yearly earnings 
+7.uploads 
+8.created year
+
+Scrutinizing the data:
+
+1. How different are they?
+
+At first, let us look at the differences between all the random samples of dataframes.
+We have 6 six dataframes: df1, df2, df3, df4, df5 and df6.
+
+df1 and df2 have are based on two different categorical columns 'category' and 'Country' but contain the same numerical attributes 'subscribers' and 'video views'.
+
+df3 and df4 are based on the same categorical column 'Youtuber' but contain different numerical attributes being 'uploads' and 'highest yearly earnings'.
+
+df5 and df6 are based on same categorical column 'Youtuber' and same numerical column 'created year' but are differentiated with the categorical columns 'category' and 'Country'.
+
+Now within the pairs of dataframes mentioned above, let us look some differences between the pairs.
+
+For df1 and df2:
+```{r}
+summary(df1$video.views)
+summary(df2$video.views)
+
+summary(df1$subscribers)
+summary(df2$subscribers)
+
+```
+The differences between df1 and df2 can be assessed by the differences in the summary values of their respective matching numerical attributes. We can see that the mean video views for df2 is 171 million more than df1. This shows that df2 has those Youtube channels with greater views than df1. Another noticeable difference is the minimum and maximum values for the subdcriber count of both samples. It can be seen that minimum value for df1 and df2 is similar. However, the maximum subscriber count for df2 is way higher than df1 and so is the mean as well. This shows that df2 has Youtube channels with greater subscribers than df1.
+
+For df3 and df4:
+```{r}
+length(setdiff(df3$Youtuber,df4$Youtuber))
+length(setdiff(df4$Youtuber,df3$Youtuber))
+```
+The differences between df3 and df4 can be assessed by the checking the Youtube channels that are in df3 but not in df4 and similarly those in df4 but not in df3. After analyzing this, we notice there are 233 Youtube channels in df3 that are not in df4, and there are 250 Youtube channels in df4 but not in df3.
+
+For df5 and df6:
+```{r}
+length(setdiff(df5$Youtuber,df6$Youtuber))
+length(setdiff(df6$Youtuber,df5$Youtuber))
+
+find_mode <- function(x) {
+  uniq_x <- unique(x)
+  freq_x <- table(x)
+  mode_values <- uniq_x[which.max(freq_x)]
+  return(mode_values)
+}
+
+find_mode(df5$created_year)
+find_mode(df6$created_year)
+```
+The differences between df5 and df6 can be assessed by checking the Youtube channels that are in df5 but not in df6 and similarly those in df6 but not in df5 After analyzing this, we notice there are 251 Youtube channels in df5 that are not in df6, and there are 256 Youtube channels in df6 but not in df5. Another analysis that can be done is to find the most occured created year in each dataframe. It noticed that the most occurred year in df5 is 2009 and for df6 it is 2020. This shows that df5 contains Youtube channels that are relatively old. However df6 contains Youtube channels that are relatively new.
+
+2. What would you have called an anomaly in one sub-sample that you wouldn't in another?
+
+a. Youtubers in df3 and df4:
+
+```{r}
+df3[!duplicated(df3$Youtuber) & !duplicated(df4$Youtuber, fromLast = TRUE), ]
+
+df4[!duplicated(df4$Youtuber) & !duplicated(df3$Youtuber, fromLast = TRUE), ]
+```
+
+The above code uses the duplicated function to identify Youtubers in each dataframe that have duplicates within the same dataframe. By comparing df3 with df4 and vice versa, the code identifies Youtubers in each dataframe that are unique, meaning they do not have duplicates within the same dataframe.In this context, these unique Youtubers are considered "anomalies" because they represent data points or observations that exist in one dataframe but do not have corresponding matches in the other dataframe. They stand out as different or uncommon observations when comparing the two dataframes. It is useful in identifying discrepencies in datasets.
+
+b. 'created year' in df5 and df6:
+Created a scatter plot between the categorical variable of df5 and df6 with 'created_year' to see any anomalies.
+
+```{r}
+ggplot()+
+  geom_point(data=df5,aes(Country,created_year))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot()+
+  geom_point(data=df6,aes(category,created_year))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+One major anomaly we notice in df6 that's not in df5 is the presence of a youtuber with a 'created_year' of 1970. This is practically not possible as youtube was founded only at 2005. However, this anomaly isn't present in df5 as we can see from the scatter plot of df2 that the youtube channels atleast exist since 2005.
+
+c. Video views less than subscribers as an anomaly.
+
+```{r}
+ch1<-df1[df1$video.views < 0.5 * df1$subscribers & df1$video.views > 0,]
+ch1
+ch2<-df2[df2$video.views < 0.5 * df2$subscribers & df2$video.views > 0,]
+ch2
+```
+
+The above checks if the "video views" are less than half of the "subscribers" count and greater than 0 for both df1 and df2. This is to see whether there are channels out there that receive significantly lesser viewership in comparison to their subscriber count. If that's the case, we consider it as an anomaly. From our results, we see one such anomaly in df2 for a youtube channel that has only 2634 views but has about  23.2 million subscribers. However, such an anomaly doesn't exist in df1. 
+
+3. Are there aspects of data that are consistent across all sub-samples?
+
+For this, we can consider the subsamples that have common attributes and find the respective that are consistent across these sub samples.
+
+Common attributes amongst the dataframes/ subsamples:
+
+a. Category: df1 and df6
+To check for the consistency between these sub-samples,we can find the intersect values for the attribute and use it to find the percentage of consistency.
+
+```{r}
+a<-intersect(df1$category,df6$category)
+a
+b<-length(unique(df1$category))
+c<-length(unique(df6$category))
+avg<- (b+c)/2
+length(a)
+length(a)/avg
+```
+
+The above code finds the common variables between the sub-samples, and then calculates the length of unique categories present in both sub-samples. From this, we get the average number of unique categories and is divided by the length of the intersection to obtain the percentage of consistency. In this way, we calculate the proportion of categories that are consistent in both sub-samples. After the calculation, we see that there is a 93.75% consistency for the categories present in both sub-samples. This shows that there is excellent consistency in categories among the sub-samples.
+
+b. Video Views: df1 and df2
+To check for the consistency between these sub-samples, we can find the Pearson correlation coefficient for 'Video views'.
+
+```{r}
+cor(df1$video.views,df2$video.views,method="pearson")
+```
+
+The correlation coefficient is -0.04224275. The indicates a degree of inconsistency or lack of consistency for 'Video views'. But since this is more inclined towards 0, the sub-samples don't completely disagree with each other. 
+
+c. Subscribers: df1 and df2
+To check for the consistency between these sub-samples, we can find the Pearson correlation coefficient for 'Subscribers'.
+
+```{r}
+cor(df1$subscribers,df2$subscribers,method="pearson")
+```
+The correlation coefficient is -0.05700081. The indicates a degree of inconsistency or lack of consistency for 'Subscribers'. But since this is more inclined towards 0, the subsamples don't completely disagree with each other.
+
+d. Youtuber: df3, df4, df5, df6
+To check for the consistency between these sub-samples,we can find the intersect values for the attribute and use it to find the percentage of consistency.
+
+```{r}
+a<-a<-Reduce(intersect,list(df3$Youtuber,df4$Youtuber,df5$Youtuber,df6$Youtuber))
+a
+b<-length(unique(df3$Youtuber))
+c<-length(unique(df4$Youtuber))
+d<-length(unique(df5$Youtuber))
+e<-length(unique(df6$Youtuber))
+avg<- (b+c+d+e)/4
+length(a)
+length(a)/avg
+```
+
+The above code finds the common variables between the sub-samples, and then calculates the length of unique Youtubers present in the 4 sub-samples. From this, we get the average number of unique Youtubers and is divided by the length of the intersection to obtain the percentage of consistency. In this way, we calculate the proportion of Youtubers that are consistent in the 4 sub-samples. After the calculation, we see that there is about 7.044% consistency for the Youtubers present in the 4 sub-samples. This shows there is a huge inconsistency in Youtubers among the sub-samples.
+
+e. Country: df2, df5
+To check for the consistency between these sub-samples,we can find the intersect values for the attribute and use it to find the percentage of consistency.
+
+```{r}
+a<-intersect(df2$Country,df5$Country)
+a
+b<-length(unique(df2$Country))
+c<-length(unique(df5$Country))
+avg<- (b+c)/2
+length(a)
+length(a)/avg
+```
+
+The above code finds the common variables between the sub-samples, and then calculates the length of unique countries present in both sub-samples. From this, we get the average number of unique countries and is divided by the length of the intersection to obtain the percentage of consistency. In this way, we calculate the proportion of countries that are consistent in both sub-samples. After the calculation, we see that there is a 80.0% consistency for the categories present in both sub-samples. 
+
+However, we can't find the consistency of an occurrence among the 6 sub-samples since there isn't any common variable among all the 6 sub-samples. But we were able to derive some valuable insights from the common attributes between the above pairs mentioned. 
+
+Conclusion:
+
+How this investigation affects how you might draw conclusions about the data in the future?
+
+- By generating multiple subsamples, I gained insights into the robustness of your conclusions. If key patterns or trends are consistent across different subsamples, it provides more confidence that these patterns are representative of the population rather than artifacts of a specific sample.
+
+- Analyzing the subsamples allowed me to identify anomalies or outliers that may not be apparent in the full dataset. Anomalies that consistently appear across multiple subsamples may indicate real data issues or important phenomena.
+
+- The investigation allowed me to assess the generalizability of your findings. 
+
+- Scrutinizing subsamples helped me gain insights into the underlying data structure.
+
+- By considering the variability and consistency across subsamples, I can make more informed decisions. For example, if I am conducting hypothesis testing or making predictions, understanding the variability helps me set realistic expectations for the accuracy of my results.
+

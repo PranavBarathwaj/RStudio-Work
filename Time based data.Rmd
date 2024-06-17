@@ -1,0 +1,195 @@
+---
+title: "Week 12 Data Dive"
+output: html_document
+date: "2023-11-07"
+---
+```{r}
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+library(broom)
+library(lindia)
+library(car)
+library(MASS)
+library(dplyr)
+library(ggplot2)
+# time series toolkits
+library(xts)
+library(tsibble)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = "C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)")
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+
+#Since there is a Youtube channel with created_year of 1970, we need to remove that to prevent inaccurate readings for our data dive.
+youtube <- youtube |>
+ filter(created_year != 1970)
+```
+
+
+In this datadive we shall be using the 'created_year' column as our explanatory variable which also stands as a column of data that encodes time. It is initially a numeric data type. Hence we shall convert it into a date data type.
+```{r}
+youtube <- youtube |>
+  mutate(created_year = as.Date(as.character(created_year), format = "%Y"))
+```
+
+For this data dive, we shall use **'subscribers' as our response variable to the date variable of 'created_year'.** Before we create a tsibble object, let us visualize a scatter plot between these two variables.
+```{r}
+youtube|>
+  ggplot()+
+  geom_point(mapping = aes(x = created_year,y=subscribers))
+```
+
+We see the respective number of subscribers in each youtube channel that was created in their respective year. It can be seen that channels created earlier have more subscribers. 
+
+Before we create a tsibble object, let us filter what we need from our 'youtube' dataset. Hence we have taken our explanatory and response variables.
+```{r}
+youtube_ <- youtube %>%
+  dplyr::select(created_year, subscribers) %>%
+  distinct()
+```
+
+**CREATING TSIBBLE**
+```{r}
+library(dplyr)
+library(tsibble)
+
+# Check for duplicate rows
+duplicates <- youtube_ %>% duplicates()
+
+# Print duplicates if any
+if (nrow(duplicates) > 0) {
+  print("Duplicate rows:")
+  print(duplicates)
+  
+  # Remove duplicate rows using group_by() and summarize()
+  youtube_ <- youtube_ %>%
+    group_by(created_year) %>%
+    summarize(subscribers = mean(subscribers, na.rm = TRUE))
+
+  # Check for duplicate rows again
+  duplicates <- youtube_ %>% duplicates()
+  
+  # Print a message if duplicates are still present
+  if (nrow(duplicates) > 0) {
+    print("Duplicate rows still exist after removal:")
+    print(duplicates)
+    stop("Duplicate rows still exist after removal.")
+  }
+}
+
+# Check the column names in your data frame
+colnames(youtube_) <- c("created_year", "subscribers")
+
+# Create the tsibble
+youtube_tsibble <- as_tsibble(youtube_, index = created_year)
+```
+
+The above  the code checks for duplicate rows in the original dataset (youtube_) using the duplicates() function. If duplicates are found, the code prints a message and the details of the duplicate rows. Next, it attempts to remove duplicates by aggregating data based on the created_year column using group_by() and summarize(). The aggregation strategy involves calculating the mean of the subscribers variable for each unique created_year. After this step, the code checks for duplicates again to ensure the removal was successful. If duplicates still exist at this point, an error message is printed. Finally, a tsibble object named youtube_tsibble is created using as_tsibble(), where the created_year column is specified as the time index. This resulting tsibble is then ready for further time series analysis, including visualizations, modeling, and trend detection.
+
+Now we shall plot our data over time and consider different windows of time.
+```{r}
+library(ggplot2)
+
+# Plot the entire time series
+ggplot(youtube_tsibble, aes(x = created_year, y = subscribers)) +
+  geom_line() +
+  labs(title = "YouTube Subscribers Over Time",
+       x = "Year",
+       y = "Subscribers")
+
+# Plot with a specific time window (e.g., 2010 to 2020)
+ggplot(filter(youtube_tsibble, created_year >= as.Date("2010-01-01") & created_year <= as.Date("2020-12-31")),
+       aes(x = created_year, y = subscribers)) +
+  geom_line() +
+  labs(title = "YouTube Subscribers Over Time (2010-2020)",
+       x = "Year",
+       y = "Subscribers")
+
+# Plot with another time window (e.g., 2020 to present)
+ggplot(filter(youtube_tsibble, created_year >= as.Date("2020-01-01")),
+       aes(x = created_year, y = subscribers)) +
+  geom_line() +
+  labs(title = "YouTube Subscribers Over Time (2020-Present)",
+       x = "Year",
+       y = "Subscribers")
+
+```
+
+**Interpretation:**
+One thing that stands out immediately is the gradual decline in the mean subscribers as years pass. The first plot displays the entire time series, providing a comprehensive overview of subscriber trends over the entire dataset. The subsequent plots focus on specific time intervals: one from 2010 to 2020 and another from 2020 to the present.
+
+In our second plot, which focuses on the time window from 2010 to 2020, we observe a discernible pattern characterized by alternating periods of growth and decline in YouTube subscribers. This cyclic fluctuation suggests a distinctive trend marked by bullish (growth) and bearish (decline) phases occurring in alternate years.This cyclical behavior in subscriber counts implies a recurring pattern, possibly influenced by seasonality, marketing strategies, or other external factors.
+
+Our third plot sees a simple decrease in subscribers. Overall from the three plots, we can witness primary and secondary trends that showcase its own bullish and bearish moments.
+
+**LINEAR REGRESSION**
+```{r}
+lm_model <- lm(subscribers ~ as.numeric(created_year), data = as.data.frame(youtube_tsibble))
+
+# Print the summary of the linear model
+summary(lm_model)
+```
+
+**Interpretation:**
+The coefficient for the as.numeric(created_year) variable is -1678.4. Since this coefficient is negative, it suggests a downward trend. Specifically, for each unit increase in the numeric representation of the created_year, the model predicts a decrease of approximately 1678.4 subscribers.
+
+The p-value associated with the as.numeric(created_year) coefficient is very small (0.000229). This low p-value indicates that the coefficient is statistically significant. In the context of the model, it supports the hypothesis that the trend in subscribers over time is not due to random chance.
+
+**Do we need to subset the data for multiple trends?**
+In this case yes. As witnessed in our previous graphs of different timelines, there are varying trends in certain brackets of time. Therefore, let us use those timelines to create subsets and analyze the linear regression models of those subsets.
+
+```{r}
+# Subset for the time window (e.g., 2010 to 2020)
+subset_2010_2020 <- filter(youtube_tsibble, created_year >= as.Date("2010-01-01") & created_year <= as.Date("2020-12-31"))
+lm_2010_2020 <- lm(subscribers ~ as.numeric(created_year), data = as.data.frame(subset_2010_2020))
+summary(lm_2010_2020)
+
+# Subset for another time window (e.g., 2020 to present)
+subset_2020_present <- filter(youtube_tsibble, created_year >= as.Date("2020-01-01"))
+lm_2020_present <- lm(subscribers ~ as.numeric(created_year), data = as.data.frame(subset_2020_present))
+summary(lm_2020_present)
+```
+**Interpretation:**
+In the linear regression analysis for the time window from 2010 to 2020, a moderate relationship between the numeric representation of the created_year and YouTube subscribers is observed. The negative coefficient suggests a potential downward trend, but its statistical significance is not confirmed at the 0.05 significance level (p-value = 0.13559). The model explains about 22.99% of the variability in subscriber counts during this period.
+
+For the subset representing the time window from 2020 to the present, a more pronounced relationship is evident, with a substantial decrease in subscribers per unit increase in the numeric representation of the year. However, the statistical significance of this relationship is not confirmed with the available data (p-value = 0.113). The high R-squared value of 0.9688 indicates that a significant proportion of the variability in subscriber counts in this subset is explained by the linear model.
+
+The subset from 2010 to 2020 indicates a relatively weak and non-significant downward trend, while the subset from 2020 to the present shows a more impactful relationship, although not statistically significant with the current sample size. 
+
+**SEASONALITY**
+```{r}
+
+library(forecast)
+youtube_tbats <- tbats(youtube_tsibble$subscribers)
+plot(youtube_tbats)
+
+# Extract residuals from the tbats model
+residuals_tbats <- residuals(youtube_tbats)
+
+# ACF plot
+acf_residue <- acf(residuals_tbats, main = "ACF of Residuals")
+pacf_residue <- pacf(residuals_tbats, main = "PACF of Residuals")
+
+# Plot ACF and PACF
+par(mfrow = c(2, 1))
+plot(acf_residue, main = "ACF of Residuals")
+plot(pacf_residue, main = "PACF of Residuals")
+
+```
+
+**Interpretation:**
+
+The spike at lag 4 in the PACF plot indicates a strong correlation between observations that are 4 time units apart.
+This suggests the presence of a seasonal pattern with a periodicity of 4.Seasonality with a periodicity of 4 could represent a quarterly pattern, assuming your data is measured at regular intervals.
+
+The spike at lag 0 in the ACF is not indicative of seasonality but rather represents the autocorrelation of the time series with itself at the same time point. This is expected and does not provide information about a repeating pattern or seasonality.
+
+A small spike at lag 4 in both ACF and PACF indicates a correlation between observations that are 4 time units apart. Similarly, a small spike at lag 12 suggests a correlation between observations 12 time units apart.
+These patterns could be indicative of quarterly seasonality in your time series data.
+
+**CONCLUSION OF DATA DIVE:**
+
+We explored the temporal dynamics of YouTube subscribers over time, utilizing the 'created_year' variable as our temporal axis and 'subscribers' as the response variable. Visualizing the scatter plot revealed a general trend of earlier channels amassing more subscribers. We then created a tsibble object, allowing for time series analysis. Our examination uncovered a gradual decline in mean subscribers over the years. Linear regression models indicated a statistically significant downward trend over the entire dataset, with subsets from 2010 to 2020 showing a weak relationship and 2020 to the present revealing a more impactful but non-significant association. Seasonality analysis using TBATS identified a quarterly pattern, evidenced by spikes at lags 4 and 12 in the PACF plot. This suggests a recurring trend every four quarters. Overall, the data dive presents a nuanced picture of YouTube subscriber dynamics, with various trends observed over different time periods, emphasizing the importance of considering subsets for a comprehensive understanding.

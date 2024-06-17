@@ -1,0 +1,174 @@
+---
+title: "Week 2 Data Dive"
+output: html_document
+date: "2023-09-04"
+---
+Importing libraries to run.
+```{r}
+library(tidyverse)
+```
+
+Initially setting our directories and loading our data.
+```{r}
+knitr::opts_knit$set(root.dir = 'C:/Users/Prana/OneDrive/Documents/Topics in Info FA23(Grad)')
+youtube <- read_delim("./Global Youtube Statistics.csv", delim = ",")
+```
+
+Performing summaries for some categorical columns of the dataset. 
+```{r}
+#summaries for Youtuber that includes unique values and counts
+summary(youtube$Youtuber) 
+unique(youtube$Youtuber) 
+count(youtube,youtube$Youtuber) 
+
+#summaries for category that includes unique values and counts
+summary(youtube$category) 
+unique(youtube$category)
+count(youtube,youtube$category) 
+
+#summaries for Country that includes unique values and counts
+summary(youtube$Country) 
+unique(youtube$Country)
+count(youtube,youtube$Country)
+
+#summaries for Title that includes unique values and counts
+summary(youtube$Title) 
+unique(youtube$Title)
+count(youtube,youtube$Title)
+
+#summaries for channel_type that includes unique values and counts
+summary(youtube$channel_type) 
+unique(youtube$channel_type)
+count(youtube,youtube$channel_type)
+```
+
+From the above summaries, we obtained the respective unique values of each column and identified the number of 
+occurrences of values in each column. 
+Some intersting observations from the above summaries:
+- The dataset consists of only 50 unique countries.
+- 992 out of the 995 Youtube channels have the same Channel name and Title.
+- There are 15 channel types and 19 Categories.
+
+Performing summaries for some numerical columns of the dataset.
+```{r}
+summary(youtube$subscribers)
+summary(youtube$`video views`)
+summary(youtube$uploads)
+summary(youtube$video_views_for_the_last_30_days)
+summary(youtube$lowest_monthly_earnings)
+summary(youtube$highest_monthly_earnings)
+summary(youtube$subscribers_for_last_30_days)
+```
+
+From the above summaries, we obtained min/max, central tendency, and some notion of distribution (e.g., quantiles). These give us valuable information into the trends and patterns of these Youtubers.
+Some intersting observations from the above summaries:
+- There are channels that have earned no money in their monthly earnings. These channels are owned by Youtube that also uploads no content as they are hash tags and contain videos released by other Youtubers using that respective hash tag.
+- There is a Youtube channel that has gained about 8 million subscribers last 30 days in comparison to the average of 345,079 subscribers.
+- There is a Youtube channel that has posted about 301208 videos in comparison to the average of just 9187.1
+
+
+Let us use more aggregate functions to see if we find something interesting about our data.
+```{r}
+sd(youtube$subscribers)
+sd(youtube$highest_monthly_earnings)
+youtube|>
+  filter(Country=="India")|>
+  pluck("subscribers")|>
+  sum()
+youtube|>
+  group_by(Country)|>
+  summarise(max_subscribers=max(subscribers))
+```
+
+Some interesting observations from the above use of aggregate functions:
+- There are totally 4310600000 subscribers amongst Indian youtube channels alone!
+- The standard deviation of subscribers is 17526105. This means that 68% of the YouTube channels in the set have a subscriber count within 17526105.
+- The standard deviation of highest_monthly_earnings is 1148622 dollars. This means that 68% of the YouTube channels in the set earn a highest monthly earning of about 1148622 dollars.
+- We can also see the maximum subscriber count of a Youtube channel in each country. 
+
+
+Project goal: To analyze and visualize YouTube Influencer Trends.
+Purpose: To explore and gain insights from the dataset of YouTubers. By using RStudio for data analysis and visualization, we can explore the distribution of content categories among YouTubers, explore potential correlations between variables, perform demographic analysis and more. 
+
+Based on the project goal and purpose, summaries of columns and data documentation, we can come up with some
+novel questions to investigate. Some of them include:
+
+1. Do YouTubers from certain countries tend to have more subscribers or higher video views on average? 
+
+This can be analyzed by creating a box plot between countries and video views & between countries and subscribers as
+we are comparing a continuous vs categorical variable
+Since there are too many countries, Country wasn't taken as a legend to show the subscriber and view count among 
+countries in one graph. 
+```{r}
+ggplot(data = youtube) + 
+  geom_boxplot(mapping = aes(x = Country, y = `video views`))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(data = youtube) + 
+  geom_boxplot(mapping = aes(x = Country, y = subscribers))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the above two box plots, we can see that YouTubers from certain countries have more video views and subscribers. For example, Youtubers from India and United States have more subscribers and video views than Youtubers from other countries. This could be due to the population factor from India and also the amount of screen time an average person has in the United States.
+
+2. Is there a relationship between a YouTuber's content category and their subscribers or video views? Are certain content categories more likely to attract larger audiences?
+
+This can be analyzed by creating a plot between subscribers and video views keeping category as a legend to assess the relationship. In this case, the legend is classified based on color.
+```{r}
+ggplot(data = youtube) + 
+  geom_point(mapping = aes(x = subscribers, y = `video views`,color=category))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the above scatter plot, we can see that high views and subscribers come from Youtube channel that produce music or movies. But the Youtube channels producing 'Entertainment', 'People & Blogs' contribute a lot to the average views and subscribers.
+
+3. Do Youtubers that upload more earn more?
+
+This can be analyzed by first finding the average yearly earnings by using the columns 'highest_yearly_earnings' 
+and 'lowest_yearly_earnings'. This is mutated to the dataset. Then we can create a line plot to analyze the average yearly earnings of Youtubers based on the number of uploads.
+```{r}
+youtube |>
+  mutate(avg_yr_earn=(highest_yearly_earnings+lowest_yearly_earnings)/2) |>
+  ggplot() +
+  geom_line(mapping = aes(x = uploads,y = avg_yr_earn)) 
+```
+
+From the above line plot, we noticed that there was no relation between the number of uploads and average earnings. 
+This means that a Youtuber's earnings doesn't depend on the frequency of videos uploaded. 
+
+4. Does the age of the Youtube channel attribute to the success of the channel?
+
+This can be analyzed by first mutating a new column 'age' by subtracting the current year with created_year of the 
+channel. Then we create a line plot between age and rank of the channel to see the trend of the success.
+```{r}
+cur=as.numeric(format(Sys.Date(), "%Y"))
+youtube |>
+  mutate(age=cur-created_year)|>
+  ggplot()+
+  geom_line(mapping = aes(x = age,y = rank))
+```
+
+From the plot, we notice that there is no trend identifiable for the success of the channel with respect to the age.
+Hence, the age of the channel doesn't attribute to its success.
+
+There was also an anomaly spotted in this graph. There was a Youtube Channel that had the age of 60 which isn't possible. 
+
+5. What are the most prevalent channel types in different countries?
+
+This can be analyzed by creating a bar plot between country and channel type. This will give a count of the channel
+type in the respective countries.
+```{r}
+youtube |>
+  ggplot() +
+  geom_bar(mapping = aes(x = Country,fill=channel_type))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+The plot gives us few observations:
+- The United States prefers more of Entertainment, Film and Games.
+- India prefers music and news more.
+- UAE prefers People and sports more.
+Similarly, different countries have their own preferences.
+
+
+Conclusion: This weeks data dive has consisted of using summary statistics of different columns along with the usage of more aggregate functions. Along with the project goal and purpose, a set of questions were investigated to analyze trends and correlations between columns to fulfill the goal of the project. These questions were answered with their respective visualizations.
